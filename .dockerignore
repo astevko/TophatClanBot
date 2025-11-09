@@ -1,0 +1,42 @@
+# Environment files
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+LICENSE
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
