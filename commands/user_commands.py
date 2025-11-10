@@ -327,23 +327,40 @@ class UserCommands(commands.Cog):
             )
             return
         
-        # Get next rank info
-        next_rank = await database.get_next_rank(member['current_rank'])
+        # Get current rank details
+        current_rank_info = await database.get_rank_by_order(member['current_rank'])
+        is_admin_only = current_rank_info.get('admin_only', False) if current_rank_info else False
+        
+        # Get next point-based rank only (not admin-only ranks)
+        next_rank = await database.get_next_rank(member['current_rank'], include_admin_only=False)
         
         embed = discord.Embed(
             title=f"📊 {interaction.user.display_name}'s Progress",
             color=discord.Color.blue()
         )
         
+        # Show current rank with type indicator
+        rank_display = f"**{member['rank_name']}**"
+        if is_admin_only:
+            rank_display += " ⚡"
+        
         embed.add_field(
             name="Current Rank",
-            value=f"**{member['rank_name']}**",
+            value=rank_display,
             inline=True
         )
         
         embed.add_field(
             name="Total Points",
             value=f"**{member['points']}**",
+            inline=True
+        )
+        
+        # Show rank type
+        rank_type = "⚡ Admin-Granted" if is_admin_only else "📊 Point-Based"
+        embed.add_field(
+            name="Rank Type",
+            value=rank_type,
             inline=True
         )
         
@@ -356,20 +373,28 @@ class UserCommands(commands.Cog):
             )
             
             embed.add_field(
-                name="Next Rank",
+                name="Next Point-Based Rank",
                 value=f"**{next_rank['rank_name']}**",
                 inline=True
             )
             
             embed.add_field(
-                name="Progress",
+                name="Progress to Next Rank",
                 value=f"{progress_bar}\n{member['points']}/{next_rank['points_required']} ({points_needed} points needed)",
                 inline=False
             )
         else:
             embed.add_field(
                 name="Status",
-                value="🏆 **Maximum Rank Achieved!**",
+                value="🏆 **Maximum Point-Based Rank Achieved!**",
+                inline=False
+            )
+        
+        # Add note for admin-only ranks
+        if is_admin_only:
+            embed.add_field(
+                name="ℹ️ Note",
+                value="You have an admin-granted rank. Points still count toward point-based ranks!",
                 inline=False
             )
         

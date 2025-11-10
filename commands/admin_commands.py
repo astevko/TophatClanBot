@@ -66,8 +66,8 @@ class AdminCommands(commands.Cog):
             )
             return
         
-        # Get next rank
-        next_rank = await database.get_next_rank(member_data['current_rank'])
+        # Get next rank (include admin-only ranks for manual promotion)
+        next_rank = await database.get_next_rank(member_data['current_rank'], include_admin_only=True)
         if not next_rank:
             await interaction.followup.send(
                 f"❌ {member.mention} is already at the maximum rank!",
@@ -75,8 +75,11 @@ class AdminCommands(commands.Cog):
             )
             return
         
-        # Check if member has enough points
-        if member_data['points'] < next_rank['points_required']:
+        # Check if rank is admin-only
+        is_admin_only = next_rank.get('admin_only', False)
+        
+        # If not admin-only, check if member has enough points
+        if not is_admin_only and member_data['points'] < next_rank['points_required']:
             points_needed = next_rank['points_required'] - member_data['points']
             await interaction.followup.send(
                 f"❌ {member.mention} needs {points_needed} more points to be promoted to **{next_rank['rank_name']}**.\n"
@@ -122,6 +125,13 @@ class AdminCommands(commands.Cog):
         embed.add_field(name="Previous Rank", value=member_data['rank_name'], inline=True)
         embed.add_field(name="New Rank", value=next_rank['rank_name'], inline=True)
         embed.add_field(name="Total Points", value=str(member_data['points']), inline=True)
+        
+        # Show rank type
+        if is_admin_only:
+            embed.add_field(name="Rank Type", value="⚡ Admin-Only Rank (Manual Promotion)", inline=False)
+        else:
+            embed.add_field(name="Rank Type", value="📊 Point-Based Rank", inline=False)
+        
         embed.add_field(name="Roblox Sync", value=roblox_status, inline=False)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
@@ -275,21 +285,40 @@ class AdminCommands(commands.Cog):
         embed.add_field(name="Roblox", value=member_data['roblox_username'], inline=True)
         embed.add_field(name="Member Since", value=member_data['created_at'][:10], inline=True)
         
+        # Get current rank details
+        current_rank_info = await database.get_rank_by_order(member_data['current_rank'])
+        is_current_admin_only = current_rank_info.get('admin_only', False) if current_rank_info else False
+        
         embed.add_field(name="Current Rank", value=member_data['rank_name'], inline=True)
         embed.add_field(name="Total Points", value=str(member_data['points']), inline=True)
         
-        if next_rank:
-            points_needed = next_rank['points_required'] - member_data['points']
-            eligible = "✅ Eligible" if points_needed <= 0 else f"❌ Needs {points_needed} more"
+        # Show rank type
+        rank_type = "⚡ Admin-Only" if is_current_admin_only else "📊 Point-Based"
+        embed.add_field(name="Rank Type", value=rank_type, inline=True)
+        
+        # Get next point-based rank (for automatic promotion eligibility)
+        next_point_rank = await database.get_next_rank(member_data['current_rank'], include_admin_only=False)
+        
+        if next_point_rank:
+            points_needed = next_point_rank['points_required'] - member_data['points']
+            eligible = "✅ Eligible for Promotion" if points_needed <= 0 else f"❌ Needs {points_needed} more points"
             
-            embed.add_field(name="Next Rank", value=next_rank['rank_name'], inline=True)
+            embed.add_field(name="Next Point-Based Rank", value=next_point_rank['rank_name'], inline=True)
             embed.add_field(
-                name="Promotion Status",
-                value=f"{eligible}\n({member_data['points']}/{next_rank['points_required']} points)",
+                name="Auto-Promotion Status",
+                value=f"{eligible}\n({member_data['points']}/{next_point_rank['points_required']} points)",
                 inline=False
             )
         else:
-            embed.add_field(name="Status", value="🏆 Maximum Rank", inline=False)
+            embed.add_field(name="Point-Based Progress", value="🏆 Maximum point-based rank achieved", inline=False)
+        
+        # Note about admin ranks
+        if is_current_admin_only:
+            embed.add_field(
+                name="ℹ️ Note",
+                value="This member has an admin-granted rank. Use `/promote` to change ranks manually.",
+                inline=False
+            )
         
         embed.set_thumbnail(url=member.display_avatar.url)
         
@@ -303,18 +332,60 @@ class AdminCommands(commands.Cog):
         
         ranks = await database.get_all_ranks()
         
+        # Separate ranks by type
+        point_based_ranks = [r for r in ranks if not r.get('admin_only', False)]
+        admin_only_ranks = [r for r in ranks if r.get('admin_only', False)]
+        
         embed = discord.Embed(
-            title="🎖️ Rank Requirements",
-            description="All clan ranks and point requirements",
+            title="🎖️ Clan Rank System",
+            description="Complete overview of all ranks",
             color=discord.Color.gold()
         )
         
-        for rank in ranks:
+        # Point-Based Ranks Section
+        if point_based_ranks:
+            point_ranks_text = ""
+            for rank in point_based_ranks:
+                point_ranks_text += f"**{rank['rank_order']}. {rank['rank_name']}** - {rank['points_required']} pts\n"
+            
             embed.add_field(
-                name=f"{rank['rank_order']}. {rank['rank_name']}",
-                value=f"**{rank['points_required']}** points required",
-                inline=True
+                name="📊 Point-Based Ranks (Earn through raids)",
+                value=point_ranks_text,
+                inline=False
             )
+        
+        # Admin-Only Ranks Section
+        if admin_only_ranks:
+            # Group by category
+            leadership = [r for r in admin_only_ranks if r['rank_order'] in [10, 11, 12, 13, 14]]
+            honorary = [r for r in admin_only_ranks if r['rank_order'] in [15, 16, 17, 18]]
+            trial = [r for r in admin_only_ranks if r['rank_order'] in [19, 20]]
+            
+            if leadership:
+                leadership_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in leadership])
+                embed.add_field(
+                    name="⚡ Leadership Ranks (Admin-granted)",
+                    value=leadership_text,
+                    inline=True
+                )
+            
+            if honorary:
+                honorary_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in honorary])
+                embed.add_field(
+                    name="🏆 Honorary Ranks (Admin-granted)",
+                    value=honorary_text,
+                    inline=True
+                )
+            
+            if trial:
+                trial_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in trial])
+                embed.add_field(
+                    name="🔰 Trial/Probation (Admin-granted)",
+                    value=trial_text,
+                    inline=True
+                )
+        
+        embed.set_footer(text="Use /promote to assign any rank manually | /check-member to see eligibility")
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     

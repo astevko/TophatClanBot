@@ -2,7 +2,7 @@
 
 ## Where to Edit Ranks
 
-File: **`database.py`** (lines 75-85)
+File: **`database.py`** (lines 76-104) and **`database_postgres.py`** (lines 85-113)
 
 Function: `insert_default_ranks()`
 
@@ -10,17 +10,33 @@ Function: `insert_default_ranks()`
 
 ## Understanding the Rank Format
 
-Each rank is defined as a tuple with 4 values:
+Each rank is defined as a tuple with 5 values:
 
 ```python
-(rank_order, "Rank Name", points_required, roblox_group_rank_id)
+(rank_order, "Rank Name", points_required, roblox_group_rank_id, admin_only)
 ```
 
 **Fields:**
 1. **rank_order** - Position in hierarchy (1, 2, 3, etc.)
 2. **rank_name** - Display name in Discord
-3. **points_required** - Minimum points needed to achieve this rank
+3. **points_required** - Minimum points needed (only matters if admin_only=False)
 4. **roblox_group_rank_id** - Corresponding Roblox group rank number
+5. **admin_only** - True for admin-granted ranks, False for point-based ranks
+
+---
+
+## Rank System: Two Types
+
+### Point-Based Ranks (admin_only=False)
+- Members can automatically qualify based on points
+- Admins can promote when eligible
+- Examples: Private, Corporal, Sergeant
+
+### Admin-Only Ranks (admin_only=True)
+- Only admins can grant these ranks
+- No point requirement
+- Used for: Leadership, Honorary, Trial positions
+- Examples: Commander, Veteran, Recruit
 
 ---
 
@@ -30,15 +46,20 @@ Each rank is defined as a tuple with 4 values:
 
 ```python
 default_ranks = [
-    (1, "Private", 0, 1),
-    (2, "Corporal", 20, 2),        # Was 30
-    (3, "Sergeant", 40, 3),         # Was 60
-    (4, "Staff Sergeant", 65, 4),   # Was 100
-    (5, "Lieutenant", 95, 5),       # Was 150
-    (6, "Captain", 130, 6),         # Was 210
-    (7, "Major", 170, 7),           # Was 280
-    (8, "Colonel", 215, 8),         # Was 360
-    (9, "General", 270, 9),         # Was 450
+    # Point-Based Ranks
+    (1, "Private", 0, 1, False),
+    (2, "Corporal", 20, 2, False),        # Was 30
+    (3, "Sergeant", 40, 3, False),         # Was 60
+    (4, "Staff Sergeant", 65, 4, False),   # Was 100
+    (5, "Lieutenant", 95, 5, False),       # Was 150
+    (6, "Captain", 130, 6, False),         # Was 210
+    (7, "Major", 170, 7, False),           # Was 280
+    (8, "Colonel", 215, 8, False),         # Was 360
+    (9, "General", 270, 9, False),         # Was 450
+    
+    # Admin-Only Ranks (keep or modify as needed)
+    (10, "Officer", 0, 10, True),
+    (11, "Veteran", 0, 11, True),
 ]
 ```
 

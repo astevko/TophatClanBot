@@ -33,6 +33,12 @@ class Config:
     _admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
     ADMIN_USER_IDS = [int(uid.strip()) for uid in _admin_ids_str.split(",") if uid.strip()]
     
+    # Database Configuration
+    # Railway/Render automatically sets DATABASE_URL for PostgreSQL
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    # If no DATABASE_URL, use SQLite (local development)
+    USE_SQLITE = DATABASE_URL is None
+    
     @classmethod
     def validate(cls):
         """Validate that required configuration is present."""

@@ -10,7 +10,14 @@ import logging
 import sys
 
 from config import Config
-import database
+
+# Import appropriate database module based on configuration
+if Config.USE_SQLITE:
+    import database
+    logger.info("Using SQLite database (local development)")
+else:
+    import database_postgres as database
+    logger.info("Using PostgreSQL database (production)")
 
 # Setup logging
 logging.basicConfig(
