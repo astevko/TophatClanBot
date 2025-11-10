@@ -18,15 +18,27 @@ logger = logging.getLogger(__name__)
 def is_admin():
     """Check if user has admin permissions."""
     async def predicate(interaction: discord.Interaction) -> bool:
-        # Check if user has administrator permission
-        if interaction.user.guild_permissions.administrator:
+        user_id = interaction.user.id
+        user_name = f"{interaction.user.name} (ID: {user_id})"
+        
+        # Method 1: Check if user ID is in whitelist
+        if Config.ADMIN_USER_IDS and user_id in Config.ADMIN_USER_IDS:
+            logger.info(f"✅ Admin access granted to {user_name} via ADMIN_USER_IDS whitelist")
             return True
         
-        # Check if user has the configured admin role
+        # Method 2: Check if user has Discord administrator permission
+        if interaction.user.guild_permissions.administrator:
+            logger.info(f"✅ Admin access granted to {user_name} via Discord Administrator permission")
+            return True
+        
+        # Method 3: Check if user has the configured admin role
         admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
         if admin_role:
+            logger.info(f"✅ Admin access granted to {user_name} via '{Config.ADMIN_ROLE_NAME}' role")
             return True
         
+        # Access denied - log the attempt
+        logger.warning(f"❌ Admin access DENIED to {user_name} - attempted to use /{interaction.command.name}")
         return False
     
     return app_commands.check(predicate)

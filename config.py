@@ -28,6 +28,11 @@ class Config:
     # Admin Role Configuration
     ADMIN_ROLE_NAME = os.getenv("ADMIN_ROLE_NAME", "Admin")
     
+    # Admin User IDs (whitelist) - comma-separated Discord user IDs
+    # Example: "123456789012345678,987654321098765432"
+    _admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
+    ADMIN_USER_IDS = [int(uid.strip()) for uid in _admin_ids_str.split(",") if uid.strip()]
+    
     @classmethod
     def validate(cls):
         """Validate that required configuration is present."""
