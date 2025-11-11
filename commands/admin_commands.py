@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_admin():
-    """Check if user has admin permissions."""
+    """Check if user has High Command permissions."""
     async def predicate(interaction: discord.Interaction) -> bool:
         user_id = interaction.user.id
         user_name = f"{interaction.user.name} (ID: {user_id})"
@@ -50,7 +50,7 @@ class AdminCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    @app_commands.command(name="promote", description="[ADMIN] Promote a member to the next rank")
+    @app_commands.command(name="promote", description="[HICOM] Promote a member to the next rank")
     @app_commands.describe(member="The member to promote")
     @is_admin()
     async def promote(self, interaction: discord.Interaction, member: discord.Member):
@@ -60,7 +60,7 @@ class AdminCommands(commands.Cog):
         # Check if user is trying to promote themselves
         if member.id == interaction.user.id:
             await interaction.followup.send(
-                "❌ You cannot promote yourself! Ask another admin to promote you.",
+                "❌ You cannot promote yourself! Ask High Command to promote you.",
                 ephemeral=True
             )
             logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to promote themselves")
@@ -137,7 +137,7 @@ class AdminCommands(commands.Cog):
         
         # Show rank type
         if is_admin_only:
-            embed.add_field(name="Rank Type", value="⚡ Admin-Only Rank (Manual Promotion)", inline=False)
+            embed.add_field(name="Rank Type", value="⚡ HICOM-Granted Rank (Manual Promotion)", inline=False)
         else:
             embed.add_field(name="Rank Type", value="📊 Point-Based Rank", inline=False)
         
@@ -151,7 +151,7 @@ class AdminCommands(commands.Cog):
         #     f"🎉 Congratulations to {member.mention} on their promotion to **{next_rank['rank_name']}**!"
         # )
     
-    @app_commands.command(name="add-points", description="[ADMIN] Manually add or remove points from a member")
+    @app_commands.command(name="add-points", description="[ELITE+] Manually add or remove points from a member")
     @app_commands.describe(
         member="The member to adjust points for",
         points="Points to add (positive) or remove (negative)"
@@ -164,7 +164,7 @@ class AdminCommands(commands.Cog):
         # Check if user is trying to add points to themselves
         if member.id == interaction.user.id:
             await interaction.followup.send(
-                "❌ You cannot add points to yourself! Ask another admin to adjust your points.",
+                "❌ You cannot add points to yourself! Ask HICOM to adjust your points.",
                 ephemeral=True
             )
             logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to add {points} points to themselves")
@@ -195,12 +195,12 @@ class AdminCommands(commands.Cog):
         try:
             if points > 0:
                 await member.send(
-                    f"🎁 You've been awarded **{points} points** by an administrator!\n"
+                    f"🎁 You've been awarded **{points} points** by Command!\n"
                     f"New total: {new_points} points. Use `/xp` to check your progress."
                 )
             else:
                 await member.send(
-                    f"⚠️ **{abs(points)} points** have been removed from your account by an administrator.\n"
+                    f"⚠️ **{abs(points)} points** have been removed from your account by Command.\n"
                     f"New total: {new_points} points."
                 )
         except:
@@ -235,7 +235,7 @@ class AdminCommands(commands.Cog):
             ephemeral=True
         )
     
-    @app_commands.command(name="view-pending", description="[ADMIN] View all pending raid submissions")
+    @app_commands.command(name="view-pending", description="[HICOM] View all pending raid submissions")
     @is_admin()
     async def view_pending(self, interaction: discord.Interaction):
         """View all pending raid submissions."""
@@ -276,7 +276,7 @@ class AdminCommands(commands.Cog):
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @app_commands.command(name="check-member", description="[ADMIN] Check a member's stats and rank eligibility")
+    @app_commands.command(name="check-member", description="[HICOM] Check a member's stats and rank eligibility")
     @app_commands.describe(member="The member to check")
     @is_admin()
     async def check_member(self, interaction: discord.Interaction, member: discord.Member):
@@ -334,7 +334,7 @@ class AdminCommands(commands.Cog):
         if is_current_admin_only:
             embed.add_field(
                 name="ℹ️ Note",
-                value="This member has an admin-granted rank. Use `/promote` to change ranks manually.",
+                value="This member has an HICOM-Granted rank. Use `/promote` to change ranks manually.",
                 inline=False
             )
         
@@ -382,7 +382,7 @@ class AdminCommands(commands.Cog):
             if leadership:
                 leadership_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in leadership])
                 embed.add_field(
-                    name="⚡ Leadership Ranks (Admin-granted)",
+                    name="⚡ Leadership Ranks (HICOM-Granted)",
                     value=leadership_text,
                     inline=True
                 )
@@ -390,7 +390,7 @@ class AdminCommands(commands.Cog):
             if honorary:
                 honorary_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in honorary])
                 embed.add_field(
-                    name="🏆 Honorary Ranks (Admin-granted)",
+                    name="🏆 Honorary Ranks (HICOM-Granted)",
                     value=honorary_text,
                     inline=True
                 )
@@ -398,7 +398,7 @@ class AdminCommands(commands.Cog):
             if trial:
                 trial_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in trial])
                 embed.add_field(
-                    name="🔰 Trial/Probation (Admin-granted)",
+                    name="🔰 Trial/Probation (HICOM-Granted)",
                     value=trial_text,
                     inline=True
                 )

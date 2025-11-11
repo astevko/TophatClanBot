@@ -17,8 +17,9 @@ class Config:
     DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
     GUILD_ID = int(os.getenv("GUILD_ID", 0))
     
-    # Admin Channel Configuration
+    # Channel Configuration
     ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID", 0))
+    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "934295169321291917"))
     
     # Roblox Configuration
     ROBLOX_GROUP_ID = int(os.getenv("ROBLOX_GROUP_ID", 0))

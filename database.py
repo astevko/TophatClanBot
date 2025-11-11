@@ -88,8 +88,13 @@ async def insert_default_ranks(db):
         (14, "C0 | Captain", 230, 121, False),
         (15, "C1 | Major", 310, 122, False),
         (16, "C2 | Colonel", 470, 124, False),
+        
        
-     
+     # Admin-Only Ranks - Honorary
+        (11, "Allied Representative", 0, 118, True),
+        (12, "Veteran TC", 0, 118, True),
+        (13, "Queen TC", 0, 119, True),
+
         # Admin-Only Ranks - Leadership
         (17, "C3 | General", 0, 129, True),
         (18, "C4 | Conquistador", 0, 130, True),
@@ -99,10 +104,7 @@ async def insert_default_ranks(db):
         (22, "Red Leader", 0, 253, True),
         (23, "Gold Leader", 0, 255, True),
     
-        # Admin-Only Ranks - Honorary
-        (11, "Allied Representative", 0, 118, True),
-        (12, "Veteran TC", 0, 118, True),
-        (13, "Queen TC", 0, 119, True),
+        
     ]
     
     for rank_order, rank_name, points_required, roblox_rank_id, admin_only in default_ranks:

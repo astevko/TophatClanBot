@@ -8,6 +8,8 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 import sys
+import asyncio
+from typing import Optional
 
 from config import Config
 
@@ -31,6 +33,72 @@ else:
     logger.info("Using PostgreSQL database (production)")
 
 
+class DiscordHandler(logging.Handler):
+    """Custom logging handler that sends logs to a Discord channel."""
+    
+    def __init__(self, bot: Optional['TophatClanBot'] = None, channel_id: Optional[int] = None):
+        super().__init__()
+        self.bot = bot
+        self.channel_id = channel_id or Config.LOG_CHANNEL_ID
+        self.log_queue = asyncio.Queue()
+        self._task = None
+    
+    def emit(self, record: logging.LogRecord):
+        """Queue log record to be sent to Discord."""
+        try:
+            msg = self.format(record)
+            # Add to queue for async processing
+            if self.bot and self._task:
+                asyncio.create_task(self._send_log(msg, record.levelname))
+        except Exception:
+            self.handleError(record)
+    
+    async def _send_log(self, message: str, level: str):
+        """Send log message to Discord channel."""
+        if not self.bot or not self.bot.is_ready():
+            return
+        
+        try:
+            channel = self.bot.get_channel(self.channel_id)
+            if not channel:
+                return
+            
+            # Color code by log level
+            color_map = {
+                'DEBUG': 0x7289DA,    # Blue
+                'INFO': 0x43B581,     # Green
+                'WARNING': 0xFAA61A,  # Yellow
+                'ERROR': 0xF04747,    # Red
+                'CRITICAL': 0x992D22  # Dark Red
+            }
+            
+            # Split message if too long (Discord has 2000 char limit)
+            if len(message) > 1900:
+                message = message[:1900] + "..."
+            
+            embed = discord.Embed(
+                description=f"```\n{message}\n```",
+                color=color_map.get(level, 0x7289DA),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_footer(text=level)
+            
+            await channel.send(embed=embed)
+        except Exception as e:
+            # Don't let Discord logging errors break the bot
+            print(f"Failed to send log to Discord: {e}", file=sys.stderr)
+    
+    def start(self):
+        """Start the handler (called when bot is ready)."""
+        if not self._task or self._task.done():
+            self._task = asyncio.create_task(self._process_queue())
+    
+    async def _process_queue(self):
+        """Process queued log messages."""
+        while True:
+            await asyncio.sleep(0.1)
+
+
 class TophatClanBot(commands.Bot):
     """Custom bot class for TophatC Clan Bot."""
     
@@ -47,6 +115,13 @@ class TophatClanBot(commands.Bot):
         )
         
         self.guild_id = Config.GUILD_ID
+        
+        # Setup Discord logging handler
+        self.discord_handler = DiscordHandler(bot=self)
+        self.discord_handler.setLevel(logging.INFO)
+        self.discord_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
     
     async def setup_hook(self):
         """Called when the bot is starting up."""
@@ -81,7 +156,12 @@ class TophatClanBot(commands.Bot):
             activity=discord.Game(name="/xp to check your rank")
         )
         
+        # Enable Discord logging
+        self.discord_handler.start()
+        logging.getLogger().addHandler(self.discord_handler)
+        
         logger.info("Bot is ready!")
+        logger.info(f"Discord logging enabled to channel {Config.LOG_CHANNEL_ID}")
     
     async def on_command_error(self, ctx, error):
         """Global error handler for commands."""
@@ -135,6 +215,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
 
