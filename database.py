@@ -75,32 +75,34 @@ async def insert_default_ranks(db):
     """Insert default military ranks into the database."""
     default_ranks = [
         # Point-Based Ranks (can auto-promote based on points)
-        (1, "Private", 0, 1, False),
-        (2, "Corporal", 30, 2, False),
-        (3, "Sergeant", 60, 3, False),
-        (4, "Staff Sergeant", 100, 4, False),
-        (5, "Lieutenant", 150, 5, False),
-        (6, "Captain", 210, 6, False),
-        (7, "Major", 280, 7, False),
-        (8, "Colonel", 360, 8, False),
-        (9, "General", 450, 9, False),
-        
+        (1, "Pending", 0, 1, False),
+        (2, "E0 | Enlist", 1, 2, False),
+        (3, "E1 | Soldier", 3, 45, False),
+        (4, "E2 | Specialist", 1, 46, False),
+        (5, "E3 | Lance Corporal", 2, 47, False),
+        (6, "E4 | Corporal", 35, 48, False),
+        (7, "E5 | Seargeant", 50, 49, False),
+        (8, "E6 | Top Seargeant", 80, 50, False),
+        (9, "E7 | Lieutenant", 120, 50, False),
+        (10, "E8 | Top Lieutenant", 170, 51, False),
+        (14, "C0 | Captain", 230, 121, False),
+        (15, "C1 | Major", 310, 122, False),
+        (16, "C2 | Colonel", 470, 124, False),
+       
+     
         # Admin-Only Ranks - Leadership
-        (10, "Officer Cadet", 0, 10, True),
-        (11, "Junior Officer", 0, 11, True),
-        (12, "Senior Officer", 0, 12, True),
-        (13, "Commander", 0, 13, True),
-        (14, "High Commander", 0, 14, True),
-        
+        (17, "C3 | General", 0, 129, True),
+        (18, "C4 | Conquistador", 0, 130, True),
+        (19, "C5 | Chief Conquistador", 0, 149, True),
+        (20, "Commander", 0, 150, True),
+        (21, "Silver Leader", 0, 252, True),
+        (22, "Red Leader", 0, 253, True),
+        (23, "Gold Leader", 0, 255, True),
+    
         # Admin-Only Ranks - Honorary
-        (15, "Veteran", 0, 15, True),
-        (16, "Elite Guard", 0, 16, True),
-        (17, "Legend", 0, 17, True),
-        (18, "Hall of Fame", 0, 18, True),
-        
-        # Admin-Only Ranks - Trial/Probation
-        (19, "Recruit", 0, 19, True),
-        (20, "Probation", 0, 20, True),
+        (11, "Allied Representative", 0, 118, True),
+        (12, "Veteran TC", 0, 118, True),
+        (13, "Queen TC", 0, 119, True),
     ]
     
     for rank_order, rank_name, points_required, roblox_rank_id, admin_only in default_ranks:
