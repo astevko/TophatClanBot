@@ -11,15 +11,7 @@ import sys
 
 from config import Config
 
-# Import appropriate database module based on configuration
-if Config.USE_SQLITE:
-    import database
-    logger.info("Using SQLite database (local development)")
-else:
-    import database_postgres as database
-    logger.info("Using PostgreSQL database (production)")
-
-# Setup logging
+# Setup logging first
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,6 +21,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Import appropriate database module based on configuration
+if Config.USE_SQLITE:
+    import database
+    logger.info("Using SQLite database (local development)")
+else:
+    import database_postgres as database
+    logger.info("Using PostgreSQL database (production)")
 
 
 class TophatClanBot(commands.Bot):
