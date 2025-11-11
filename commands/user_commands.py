@@ -403,6 +403,33 @@ class UserCommands(commands.Cog):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
+    @app_commands.command(name="show-my-id", description="Get your Discord User ID for admin configuration")
+    async def show_my_id(self, interaction: discord.Interaction):
+        """Show user their Discord ID."""
+        embed = discord.Embed(
+            title="📋 Your Discord User ID",
+            description=f"Your Discord User ID is: **`{interaction.user.id}`**",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="What is this?",
+            value="This is your unique Discord identifier. Admins can use this to grant you special permissions.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="How to use",
+            value=(
+                "To add you as a bot admin, the server owner needs to:\n"
+                f"1. Add `{interaction.user.id}` to ADMIN_USER_IDS in .env\n"
+                "2. Restart the bot"
+            ),
+            inline=False
+        )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
     @app_commands.command(name="leaderboard", description="View the top clan members by points")
     async def leaderboard(self, interaction: discord.Interaction):
         """Display the clan leaderboard."""

@@ -32,21 +32,23 @@ run.bat    # Windows
 
 ## Commands
 
-### User Commands
+### Quick Reference
 
-- `/xp` - Check your current rank and progress (e.g., "Private 10/30")
-- `/leaderboard` - View the top 10 clan members by points
-- `/link-roblox <username>` - Link your Discord account to your Roblox username
-- `/submit-raid <proof_image>` - Submit a raid event for admin approval
+**User Commands:**
+- `/xp` - Check your rank and points progress
+- `/leaderboard` - View top 10 members by points
+- `/link-roblox <username>` - Link Discord to Roblox account
+- `/submit-raid <proof_image>` - Submit raid for approval
 
-### Admin Commands
+**Admin Commands:**
+- `/promote @user` - Promote member to next rank
+- `/add-points @user <amount>` - Adjust member points
+- `/set-admin-channel <channel>` - Set submission channel
+- `/view-pending` - View pending submissions
+- `/check-member @user` - Check member stats
+- `/list-ranks` - View all ranks
 
-- `/promote @user` - Promote a member to the next rank (updates Discord role + Roblox group rank)
-- `/add-points @user <amount>` - Manually add or remove points from a member
-- `/set-admin-channel <channel>` - Configure where raid submissions are posted
-- `/view-pending` - See all pending raid submissions
-- `/check-member @user` - View detailed stats and promotion eligibility
-- `/list-ranks` - View all rank requirements
+📖 **For detailed command usage, examples, and troubleshooting, see [COMMANDS_GUIDE.md](COMMANDS_GUIDE.md)**
 
 ## Rank System
 

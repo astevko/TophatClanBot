@@ -57,6 +57,15 @@ class AdminCommands(commands.Cog):
         """Promote a member to the next rank."""
         await interaction.response.defer(ephemeral=True)
         
+        # Check if user is trying to promote themselves
+        if member.id == interaction.user.id:
+            await interaction.followup.send(
+                "❌ You cannot promote yourself! Ask another admin to promote you.",
+                ephemeral=True
+            )
+            logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to promote themselves")
+            return
+        
         # Get member data
         member_data = await database.get_member(member.id)
         if not member_data:
@@ -151,6 +160,15 @@ class AdminCommands(commands.Cog):
     async def add_points(self, interaction: discord.Interaction, member: discord.Member, points: int):
         """Add or remove points from a member."""
         await interaction.response.defer(ephemeral=True)
+        
+        # Check if user is trying to add points to themselves
+        if member.id == interaction.user.id:
+            await interaction.followup.send(
+                "❌ You cannot add points to yourself! Ask another admin to adjust your points.",
+                ephemeral=True
+            )
+            logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to add {points} points to themselves")
+            return
         
         # Get member data
         member_data = await database.get_member(member.id)

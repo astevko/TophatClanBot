@@ -178,6 +178,7 @@ grep "DENIED" bot.log
 - Regularly review admin access logs
 - Remove admins when they leave the clan
 - Use different roles for different permission levels
+- Have multiple admins to prevent self-promotion abuse
 
 ### ❌ DON'T:
 - Share your Discord bot token
@@ -185,6 +186,21 @@ grep "DENIED" bot.log
 - Use predictable role names like "admin" or "mod"
 - Leave the `ADMIN_USER_IDS` empty in production
 - Trust users just because they ask
+
+### 🔒 Built-in Protections
+
+The bot includes these security measures:
+
+**Self-Action Prevention:**
+- ❌ Admins cannot promote themselves
+- ❌ Admins cannot add points to themselves
+- ✅ All attempts are logged
+- ✅ Must ask another admin for changes
+
+**Audit Trail:**
+- All admin actions logged with user ID
+- Failed admin access attempts logged
+- Self-promotion attempts logged
 
 ---
 
