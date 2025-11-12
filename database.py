@@ -194,6 +194,38 @@ async def add_points(discord_id: int, points: int) -> bool:
         return True
 
 
+async def check_promotion_eligibility(discord_id: int) -> Optional[Dict[str, Any]]:
+    """Check if a member is eligible for promotion. Returns next rank info if eligible, None otherwise."""
+    member = await get_member(discord_id)
+    if not member:
+        return None
+    
+    # Get current rank info
+    current_rank = await get_rank_by_order(member['current_rank'])
+    if not current_rank:
+        return None
+    
+    # Skip if current rank is admin-only (can't auto-promote from admin ranks)
+    if current_rank.get('admin_only', False):
+        return None
+    
+    # Get next point-based rank
+    next_rank = await get_next_rank(member['current_rank'], include_admin_only=False)
+    if not next_rank:
+        return None  # Already at max rank
+    
+    # Check if they have enough points
+    if member['points'] >= next_rank['points_required']:
+        return {
+            'member': member,
+            'current_rank': current_rank,
+            'next_rank': next_rank,
+            'eligible': True
+        }
+    
+    return None
+
+
 async def set_member_rank(discord_id: int, rank_order: int) -> bool:
     """Set a member's rank."""
     async with aiosqlite.connect(DATABASE_PATH) as db:

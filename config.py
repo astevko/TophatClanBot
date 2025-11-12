@@ -19,15 +19,27 @@ class Config:
     
     # Channel Configuration
     ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID", 0))
-    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "1437675506483986552"))
+    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
     
     # Roblox Configuration
     ROBLOX_GROUP_ID = int(os.getenv("ROBLOX_GROUP_ID", 0))
     ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
     ROBLOX_COOKIE = os.getenv("ROBLOX_COOKIE")
     
-    # Admin Role Configuration
+    # Role Configuration (by name)
     ADMIN_ROLE_NAME = os.getenv("ADMIN_ROLE_NAME", "Admin")
+    MODERATOR_ROLE_NAME = os.getenv("MODERATOR_ROLE_NAME", "Moderator")
+    OFFICER_ROLE_NAME = os.getenv("OFFICER_ROLE_NAME", "Officer")
+    ELITE_ROLE_NAME = os.getenv("ELITE_ROLE_NAME", "Elite")
+    MEMBER_ROLE_NAME = os.getenv("MEMBER_ROLE_NAME", "Member")
+    
+    # Role Configuration (by ID) - More reliable than names
+    # Leave empty to rely on role names only
+    ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID", "0")) or None
+    MODERATOR_ROLE_ID = int(os.getenv("MODERATOR_ROLE_ID", "0")) or None
+    OFFICER_ROLE_ID = int(os.getenv("OFFICER_ROLE_ID", "0")) or None
+    ELITE_ROLE_ID = int(os.getenv("ELITE_ROLE_ID", "0")) or None
+    MEMBER_ROLE_ID = int(os.getenv("MEMBER_ROLE_ID", "0")) or None
     
     # Admin User IDs (whitelist) - comma-separated Discord user IDs
     # Example: "123456789012345678,987654321098765432"

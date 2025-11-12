@@ -28,12 +28,173 @@ def is_admin():
         if interaction.user.guild_permissions.administrator:
             return True
         
-        # Method 3: Check if user has the configured admin role
+        # Method 3: Check if user has the configured admin role (by ID or name)
+        if Config.ADMIN_ROLE_ID:
+            admin_role = discord.utils.get(interaction.user.roles, id=Config.ADMIN_ROLE_ID)
+            if admin_role:
+                return True
+        
         admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
         if admin_role:
             return True
         
         # Access denied
+        return False
+    
+    return app_commands.check(predicate)
+
+
+def has_role(role_name: str = None, role_id: int = None):
+    """Check if user has a specific role by name or ID.
+    
+    Args:
+        role_name: Role name to check (optional)
+        role_id: Role ID to check (optional)
+    
+    Note: At least one parameter must be provided.
+    """
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if not role_name and not role_id:
+            raise ValueError("Either role_name or role_id must be provided")
+        
+        # Check by ID first (more reliable)
+        if role_id:
+            role = discord.utils.get(interaction.user.roles, id=role_id)
+            if role:
+                return True
+        
+        # Fallback to name
+        if role_name:
+            role = discord.utils.get(interaction.user.roles, name=role_name)
+            if role:
+                return True
+        
+        return False
+    
+    return app_commands.check(predicate)
+
+
+def has_any_role(*role_names: str, role_ids: list = None):
+    """Check if user has ANY of the specified roles (by name or ID).
+    
+    Args:
+        *role_names: Variable number of role names
+        role_ids: List of role IDs to check (optional)
+    """
+    async def predicate(interaction: discord.Interaction) -> bool:
+        # Check role IDs first
+        if role_ids:
+            for role_id in role_ids:
+                role = discord.utils.get(interaction.user.roles, id=role_id)
+                if role:
+                    return True
+        
+        # Check role names
+        for role_name in role_names:
+            role = discord.utils.get(interaction.user.roles, name=role_name)
+            if role:
+                return True
+        
+        return False
+    
+    return app_commands.check(predicate)
+
+
+def has_all_roles(*role_names: str, role_ids: list = None):
+    """Check if user has ALL of the specified roles (by name or ID).
+    
+    Args:
+        *role_names: Variable number of role names
+        role_ids: List of role IDs to check (optional)
+    """
+    async def predicate(interaction: discord.Interaction) -> bool:
+        # Check role IDs
+        if role_ids:
+            for role_id in role_ids:
+                role = discord.utils.get(interaction.user.roles, id=role_id)
+                if not role:
+                    return False
+        
+        # Check role names
+        for role_name in role_names:
+            role = discord.utils.get(interaction.user.roles, name=role_name)
+            if not role:
+                return False
+        
+        return True
+    
+    return app_commands.check(predicate)
+
+
+def is_moderator():
+    """Check if user has Moderator role or higher permissions."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        # Check if they're already an admin
+        if interaction.user.guild_permissions.administrator:
+            return True
+        
+        # Check if they have admin role (by ID or name)
+        if Config.ADMIN_ROLE_ID:
+            admin_role = discord.utils.get(interaction.user.roles, id=Config.ADMIN_ROLE_ID)
+            if admin_role:
+                return True
+        
+        admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
+        if admin_role:
+            return True
+        
+        # Check if they have moderator role (by ID or name)
+        if Config.MODERATOR_ROLE_ID:
+            mod_role = discord.utils.get(interaction.user.roles, id=Config.MODERATOR_ROLE_ID)
+            if mod_role:
+                return True
+        
+        mod_role = discord.utils.get(interaction.user.roles, name=Config.MODERATOR_ROLE_NAME)
+        if mod_role:
+            return True
+        
+        return False
+    
+    return app_commands.check(predicate)
+
+
+def is_officer():
+    """Check if user has Officer role or higher permissions."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        # Check if they're admin or moderator first
+        if interaction.user.guild_permissions.administrator:
+            return True
+        
+        # Check admin role (by ID or name)
+        if Config.ADMIN_ROLE_ID:
+            admin_role = discord.utils.get(interaction.user.roles, id=Config.ADMIN_ROLE_ID)
+            if admin_role:
+                return True
+        
+        admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
+        if admin_role:
+            return True
+        
+        # Check moderator role (by ID or name)
+        if Config.MODERATOR_ROLE_ID:
+            mod_role = discord.utils.get(interaction.user.roles, id=Config.MODERATOR_ROLE_ID)
+            if mod_role:
+                return True
+        
+        mod_role = discord.utils.get(interaction.user.roles, name=Config.MODERATOR_ROLE_NAME)
+        if mod_role:
+            return True
+        
+        # Check officer role (by ID or name)
+        if Config.OFFICER_ROLE_ID:
+            officer_role = discord.utils.get(interaction.user.roles, id=Config.OFFICER_ROLE_ID)
+            if officer_role:
+                return True
+        
+        officer_role = discord.utils.get(interaction.user.roles, name=Config.OFFICER_ROLE_NAME)
+        if officer_role:
+            return True
+        
         return False
     
     return app_commands.check(predicate)
@@ -108,16 +269,22 @@ class AdminCommands(commands.Cog):
             logger.error(f"Failed to update Roblox rank: {e}")
         
         # Notify member
+        dm_sent = False
         try:
             await member.send(
                 f"🎉 **Congratulations!** You've been promoted to **{next_rank['rank_name']}**!\n"
                 f"Keep up the great work in the clan!"
             )
-        except:
-            pass
+            dm_sent = True
+            logger.info(f"Sent promotion DM to {member.name} (ID: {member.id})")
+        except discord.Forbidden:
+            logger.warning(f"Cannot send DM to {member.name} (ID: {member.id}) - DMs disabled or bot blocked")
+        except Exception as e:
+            logger.error(f"Failed to send promotion DM to {member.name} (ID: {member.id}): {e}")
         
         # Send confirmation
         roblox_status = "✅ Roblox rank updated" if roblox_success else "⚠️ Roblox rank update failed"
+        dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
         
         embed = discord.Embed(
             title="✅ Promotion Successful",
@@ -135,7 +302,8 @@ class AdminCommands(commands.Cog):
         else:
             embed.add_field(name="Rank Type", value="📊 Point-Based Rank", inline=False)
         
-        embed.add_field(name="Roblox Sync", value=roblox_status, inline=False)
+        embed.add_field(name="Roblox Sync", value=roblox_status, inline=True)
+        embed.add_field(name="Notification", value=dm_status, inline=True)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
         
@@ -185,6 +353,7 @@ class AdminCommands(commands.Cog):
         await database.add_points(member.id, points)
         
         # Notify member
+        dm_sent = False
         try:
             if points > 0:
                 await member.send(
@@ -196,11 +365,60 @@ class AdminCommands(commands.Cog):
                     f"⚠️ **{abs(points)} points** have been removed from your account by Command.\n"
                     f"New total: {new_points} points."
                 )
-        except:
-            pass
+            dm_sent = True
+            logger.info(f"Sent points notification DM to {member.name} (ID: {member.id})")
+        except discord.Forbidden:
+            logger.warning(f"Cannot send DM to {member.name} (ID: {member.id}) - DMs disabled or bot blocked")
+        except Exception as e:
+            logger.error(f"Failed to send points DM to {member.name} (ID: {member.id}): {e}")
+        
+        # Check if member is now eligible for promotion (only if points were added)
+        promotion_eligible = False
+        if points > 0:
+            eligibility = await database.check_promotion_eligibility(member.id)
+            if eligibility:
+                promotion_eligible = True
+                # Send notification to admin channel
+                admin_channel_id = await database.get_config("admin_channel_id")
+                if not admin_channel_id:
+                    admin_channel_id = Config.ADMIN_CHANNEL_ID
+                
+                if admin_channel_id:
+                    admin_channel = interaction.guild.get_channel(int(admin_channel_id))
+                    if admin_channel:
+                        next_rank = eligibility['next_rank']
+                        
+                        promo_embed = discord.Embed(
+                            title="🎖️ Member Eligible for Promotion",
+                            description=f"{member.mention} has earned enough points for a promotion!",
+                            color=discord.Color.gold()
+                        )
+                        
+                        promo_embed.add_field(name="Member", value=member.mention, inline=True)
+                        promo_embed.add_field(name="Current Rank", value=member_data['rank_name'], inline=True)
+                        promo_embed.add_field(name="Total Points", value=str(new_points), inline=True)
+                        
+                        promo_embed.add_field(
+                            name="Eligible For", 
+                            value=f"**{next_rank['rank_name']}**\n(Requires {next_rank['points_required']} points)", 
+                            inline=False
+                        )
+                        
+                        promo_embed.set_footer(text="Click the buttons below to approve or deny the promotion")
+                        
+                        # Create promotion approval view
+                        from commands.user_commands import PromotionApprovalView
+                        promo_view = PromotionApprovalView(
+                            member_id=member.id,
+                            next_rank_order=next_rank['rank_order']
+                        )
+                        
+                        await admin_channel.send(embed=promo_embed, view=promo_view)
         
         # Send confirmation
         action = "added to" if points > 0 else "removed from"
+        dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
+        
         embed = discord.Embed(
             title="✅ Points Updated",
             description=f"{abs(points)} points {action} {member.mention}",
@@ -210,6 +428,93 @@ class AdminCommands(commands.Cog):
         embed.add_field(name="Previous Points", value=str(member_data['points']), inline=True)
         embed.add_field(name="Change", value=f"{points:+d}", inline=True)
         embed.add_field(name="New Points", value=str(new_points), inline=True)
+        embed.add_field(name="Notification", value=dm_status, inline=False)
+        
+        if promotion_eligible:
+            embed.add_field(
+                name="🎖️ Promotion Available", 
+                value=f"{member.mention} is now eligible for promotion!", 
+                inline=False
+            )
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="points-remove", description="[HICOM] Remove points from a member")
+    @app_commands.describe(
+        member="The member to remove points from",
+        points="Number of points to remove"
+    )
+    @is_admin()
+    async def points_remove(self, interaction: discord.Interaction, member: discord.Member, points: int):
+        """Remove points from a member."""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Validate positive number
+        if points <= 0:
+            await interaction.followup.send(
+                "❌ Please enter a positive number of points to remove.",
+                ephemeral=True
+            )
+            return
+        
+        # Check if user is trying to remove points from themselves
+        if member.id == interaction.user.id:
+            await interaction.followup.send(
+                "❌ You cannot remove points from yourself! Ask another admin.",
+                ephemeral=True
+            )
+            return
+        
+        # Get member data
+        member_data = await database.get_member(member.id)
+        if not member_data:
+            await interaction.followup.send(
+                f"❌ {member.mention} is not registered. They need to use `/link-roblox` first.",
+                ephemeral=True
+            )
+            return
+        
+        # Validate member has enough points
+        if member_data['points'] < points:
+            await interaction.followup.send(
+                f"❌ Cannot remove {points} points. {member.mention} only has {member_data['points']} points.",
+                ephemeral=True
+            )
+            return
+        
+        # Calculate new total
+        new_points = member_data['points'] - points
+        
+        # Update points (use negative value)
+        await database.add_points(member.id, -points)
+        
+        # Notify member
+        dm_sent = False
+        try:
+            await member.send(
+                f"⚠️ **{points} points** have been removed from your account by High Command.\n"
+                f"New total: {new_points} points."
+            )
+            dm_sent = True
+            logger.info(f"Sent point removal DM to {member.name} (ID: {member.id})")
+        except discord.Forbidden:
+            logger.warning(f"Cannot send DM to {member.name} (ID: {member.id}) - DMs disabled or bot blocked")
+        except Exception as e:
+            logger.error(f"Failed to send removal DM to {member.name} (ID: {member.id}): {e}")
+        
+        # Send confirmation
+        dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
+        
+        embed = discord.Embed(
+            title="✅ Points Removed",
+            description=f"{points} points removed from {member.mention}",
+            color=discord.Color.orange()
+        )
+        
+        embed.add_field(name="Previous Points", value=str(member_data['points']), inline=True)
+        embed.add_field(name="Removed", value=f"-{points}", inline=True)
+        embed.add_field(name="New Points", value=str(new_points), inline=True)
+        embed.add_field(name="Notification", value=dm_status, inline=False)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     

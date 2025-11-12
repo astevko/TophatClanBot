@@ -163,6 +163,112 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
         await interaction.followup.send(confirmation, ephemeral=True)
 
 
+class PromotionApprovalView(discord.ui.View):
+    """View with Approve/Deny buttons for promotion eligibility."""
+    
+    def __init__(self, member_id: int, next_rank_order: int):
+        super().__init__(timeout=None)
+        self.member_id = member_id
+        self.next_rank_order = next_rank_order
+    
+    @discord.ui.button(label="Approve Promotion", style=discord.ButtonStyle.green, emoji="✅")
+    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle promotion approval."""
+        # Check admin permissions
+        from bot import is_admin
+        from config import Config
+        
+        if not interaction.user.guild_permissions.administrator:
+            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
+            if not admin_role and interaction.user.id not in Config.ADMIN_USER_IDS:
+                await interaction.response.send_message(
+                    "❌ You don't have permission to approve promotions.",
+                    ephemeral=True
+                )
+                return
+        
+        await interaction.response.defer()
+        
+        # Get member
+        member = interaction.guild.get_member(self.member_id)
+        if not member:
+            await interaction.followup.send("❌ Member not found.", ephemeral=True)
+            return
+        
+        # Get member data
+        member_data = await database.get_member(self.member_id)
+        if not member_data:
+            await interaction.followup.send("❌ Member data not found.", ephemeral=True)
+            return
+        
+        # Get next rank
+        next_rank = await database.get_rank_by_order(self.next_rank_order)
+        if not next_rank:
+            await interaction.followup.send("❌ Rank not found.", ephemeral=True)
+            return
+        
+        # Update rank in database
+        await database.set_member_rank(self.member_id, self.next_rank_order)
+        
+        # Update Discord role (simplified - you can expand this)
+        # await self._update_member_role(member, member_data['current_rank'], self.next_rank_order)
+        
+        # Notify member
+        try:
+            await member.send(
+                f"🎉 **Congratulations!** You've been promoted to **{next_rank['rank_name']}**!\n"
+                f"Keep up the great work in the clan!"
+            )
+        except:
+            pass
+        
+        # Update the embed
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        embed.title = "✅ Promotion Approved"
+        embed.add_field(name="Approved By", value=interaction.user.mention, inline=False)
+        
+        # Disable buttons
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.followup.send(
+            f"✅ {member.mention} has been promoted to **{next_rank['rank_name']}**!",
+            ephemeral=True
+        )
+    
+    @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, emoji="❌")
+    async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle promotion denial."""
+        # Check admin permissions
+        from config import Config
+        
+        if not interaction.user.guild_permissions.administrator:
+            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
+            if not admin_role and interaction.user.id not in Config.ADMIN_USER_IDS:
+                await interaction.response.send_message(
+                    "❌ You don't have permission to deny promotions.",
+                    ephemeral=True
+                )
+                return
+        
+        await interaction.response.defer()
+        
+        # Update the embed
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.red()
+        embed.title = "❌ Promotion Denied"
+        embed.add_field(name="Denied By", value=interaction.user.mention, inline=False)
+        
+        # Disable buttons
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.followup.send("❌ Promotion denied.", ephemeral=True)
+
+
 class RaidApprovalView(discord.ui.View):
     """View with Approve/Decline buttons for raid submissions."""
     
@@ -346,9 +452,12 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
         
         await self.approval_interaction.message.edit(embed=embed, view=view)
         
-        # Notify participants
+        # Notify participants and check for promotion eligibility
         event_type = submission.get('event_type', 'event')
+        eligible_for_promotion = []
+        
         for discord_id in awarded_discord_ids:
+            # Send DM notification
             try:
                 member = interaction.guild.get_member(discord_id)
                 if member:
@@ -358,6 +467,54 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                     )
             except:
                 pass
+            
+            # Check if now eligible for promotion
+            eligibility = await database.check_promotion_eligibility(discord_id)
+            if eligibility:
+                eligible_for_promotion.append({
+                    'discord_id': discord_id,
+                    'info': eligibility
+                })
+        
+        # Send promotion eligibility notifications to admin channel
+        if eligible_for_promotion:
+            admin_channel_id = await database.get_config("admin_channel_id")
+            if not admin_channel_id:
+                admin_channel_id = Config.ADMIN_CHANNEL_ID
+            
+            if admin_channel_id:
+                admin_channel = interaction.guild.get_channel(int(admin_channel_id))
+                if admin_channel:
+                    for eligible in eligible_for_promotion:
+                        member_info = eligible['info']['member']
+                        next_rank = eligible['info']['next_rank']
+                        discord_member = interaction.guild.get_member(eligible['discord_id'])
+                        
+                        promo_embed = discord.Embed(
+                            title="🎖️ Member Eligible for Promotion",
+                            description=f"{discord_member.mention} has earned enough points for a promotion!",
+                            color=discord.Color.gold()
+                        )
+                        
+                        promo_embed.add_field(name="Member", value=discord_member.mention, inline=True)
+                        promo_embed.add_field(name="Current Rank", value=member_info['rank_name'], inline=True)
+                        promo_embed.add_field(name="Total Points", value=str(member_info['points']), inline=True)
+                        
+                        promo_embed.add_field(
+                            name="Eligible For", 
+                            value=f"**{next_rank['rank_name']}**\n(Requires {next_rank['points_required']} points)", 
+                            inline=False
+                        )
+                        
+                        promo_embed.set_footer(text="Click the buttons below to approve or deny the promotion")
+                        
+                        # Create promotion approval view
+                        promo_view = PromotionApprovalView(
+                            member_id=eligible['discord_id'],
+                            next_rank_order=next_rank['rank_order']
+                        )
+                        
+                        await admin_channel.send(embed=promo_embed, view=promo_view)
         
         # Build result message
         total_usernames = len(usernames)
@@ -468,37 +625,25 @@ class UserCommands(commands.Cog):
     @app_commands.command(name="show-my-id", description="Get your Discord User ID for admin configuration")
     async def show_my_id(self, interaction: discord.Interaction):
         """Show user their Discord ID."""
+        await interaction.response.defer(ephemeral=True)
+        
         embed = discord.Embed(
             title="📋 Your Discord User ID",
             description=f"Your Discord User ID is: **`{interaction.user.id}`**",
             color=discord.Color.blue()
         )
         
-        embed.add_field(
-            name="What is this?",
-            value="This is your unique Discord identifier. Admins can use this to grant you special permissions.",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="How to use",
-            value=(
-                "To add you as a bot admin, the server owner needs to:\n"
-                f"1. Add `{interaction.user.id}` to ADMIN_USER_IDS in .env\n"
-                "2. Restart the bot"
-            ),
-            inline=False
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     @app_commands.command(name="leaderboard", description="View the top clan members by points")
     async def leaderboard(self, interaction: discord.Interaction):
         """Display the clan leaderboard."""
+        await interaction.response.defer()
+        
         members = await database.get_leaderboard(10)
         
         if not members:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "📊 No members found in the leaderboard yet.",
                 ephemeral=True
             )
@@ -526,7 +671,7 @@ class UserCommands(commands.Cog):
         embed.description = leaderboard_text
         embed.set_footer(text="Keep raiding to climb the ranks!")
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @app_commands.command(name="link-roblox", description="Link your Discord account to your Roblox username")
     @app_commands.describe(username="Your Roblox username")
