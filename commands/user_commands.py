@@ -251,7 +251,7 @@ class RaidApprovalView(discord.ui.View):
             event_type = submission.get('event_type', 'event')
             if submitter:
                 await submitter.send(
-                    f"❌ Your {event_type} submission #{self.submission_id} has been declined by {interaction.user.mention}."
+                    f"❌ Your {event_type} submission has been declined by {interaction.user.mention}."
                 )
         except:
             pass
