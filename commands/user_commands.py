@@ -16,19 +16,27 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 
-class RaidSubmissionModal(discord.ui.Modal, title="Submit Raid Event"):
-    """Modal for collecting raid submission details."""
+class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
+    """Modal for collecting event submission details."""
+    
+    event_type = discord.ui.TextInput(
+        label="Event Type",
+        placeholder="e.g., Patrol, Raid, Defense, Training, etc.",
+        style=discord.TextStyle.short,
+        required=True,
+        max_length=50
+    )
     
     participants = discord.ui.TextInput(
-        label="Participants",
-        placeholder="@user1 @user2 @user3 or mention them by name",
+        label="Participants (Roblox Usernames)",
+        placeholder="Enter Roblox usernames, separated by commas or newlines\nExample: Player1, Player2, Player3",
         style=discord.TextStyle.paragraph,
         required=True,
         max_length=1000
     )
     
     start_time = discord.ui.TextInput(
-        label="Raid Start Time",
+        label="Event Start Time",
         placeholder="e.g., 2024-11-09 14:30 or 2:30 PM EST",
         style=discord.TextStyle.short,
         required=True,
@@ -36,7 +44,7 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Raid Event"):
     )
     
     end_time = discord.ui.TextInput(
-        label="Raid End Time",
+        label="Event End Time",
         placeholder="e.g., 2024-11-09 16:00 or 4:00 PM EST",
         style=discord.TextStyle.short,
         required=True,
@@ -52,12 +60,35 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Raid Event"):
         """Handle the modal submission."""
         await interaction.response.defer(ephemeral=True)
         
-        # Parse participants (extract user IDs from mentions)
+        # Parse participants (Roblox usernames)
         participants_text = self.participants.value
+        
+        # Split by comma, newline, or whitespace and clean up
+        raw_usernames = re.split(r'[,\n]+', participants_text)
+        usernames = [username.strip() for username in raw_usernames if username.strip()]
+        
+        if not usernames:
+            await interaction.followup.send(
+                "❌ No participants found. Please enter at least one Roblox username.",
+                ephemeral=True
+            )
+            return
+        
+        # Check which participants are registered (but allow unregistered ones)
+        linked_members = []
+        unlinked_usernames = []
+        
+        for username in usernames:
+            member = await database.get_member_by_roblox(username)
+            if member:
+                linked_members.append(member)
+            else:
+                unlinked_usernames.append(username)
         
         # Store submission in database
         submission_id = await database.create_raid_submission(
             submitter_id=self.submitter.id,
+            event_type=self.event_type.value.strip(),
             participants=participants_text,
             start_time=self.start_time.value,
             end_time=self.end_time.value,
@@ -86,16 +117,27 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Raid Event"):
         
         # Create embed for admin review
         embed = discord.Embed(
-            title="🎯 New Raid Submission",
+            title=f"🎯 New {self.event_type.value.strip()} Submission",
             color=discord.Color.blue(),
             timestamp=discord.utils.utcnow()
         )
         
+        embed.add_field(name="Event Type", value=self.event_type.value.strip(), inline=True)
         embed.add_field(name="Submitted By", value=self.submitter.mention, inline=True)
         embed.add_field(name="Submission ID", value=f"#{submission_id}", inline=True)
         embed.add_field(name="Status", value="⏳ Pending Review", inline=True)
         
-        embed.add_field(name="Participants", value=participants_text, inline=False)
+        # Show participant count and names with link status
+        total_participants = len(usernames)
+        participant_display = f"**Total: {total_participants} participant(s)**\n"
+        participant_display += f"✅ Linked: {len(linked_members)}\n"
+        if unlinked_usernames:
+            participant_display += f"⚠️ Unlinked: {len(unlinked_usernames)}\n\n"
+            participant_display += f"**All Participants:**\n{participants_text}"
+        else:
+            participant_display += f"\n**Participants:**\n{participants_text}"
+        
+        embed.add_field(name="Participants (Roblox)", value=participant_display, inline=False)
         embed.add_field(name="Start Time", value=self.start_time.value, inline=True)
         embed.add_field(name="End Time", value=self.end_time.value, inline=True)
         
@@ -107,10 +149,18 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Raid Event"):
         
         await admin_channel.send(embed=embed, view=view)
         
-        await interaction.followup.send(
-            "✅ Raid submission sent for admin review! You'll be notified once it's processed.",
-            ephemeral=True
-        )
+        # Build confirmation message
+        event_name = self.event_type.value.strip()
+        confirmation = f"✅ {event_name} submission sent for admin review! You'll be notified once it's processed.\n\n"
+        confirmation += f"**Participants:** {total_participants} total\n"
+        confirmation += f"✅ {len(linked_members)} will receive points (linked accounts)\n"
+        
+        if unlinked_usernames:
+            confirmation += f"⚠️ {len(unlinked_usernames)} won't receive points (not linked):\n"
+            confirmation += f"**{', '.join(unlinked_usernames)}**\n"
+            confirmation += f"\nThese users can use `/link-roblox` to link their accounts and receive points in future events."
+        
+        await interaction.followup.send(confirmation, ephemeral=True)
 
 
 class RaidApprovalView(discord.ui.View):
@@ -198,9 +248,10 @@ class RaidApprovalView(discord.ui.View):
         # Notify submitter
         try:
             submitter = interaction.guild.get_member(submission['submitter_id'])
+            event_type = submission.get('event_type', 'event')
             if submitter:
                 await submitter.send(
-                    f"❌ Your raid submission #{self.submission_id} has been declined by {interaction.user.mention}."
+                    f"❌ Your {event_type} submission #{self.submission_id} has been declined by {interaction.user.mention}."
                 )
         except:
             pass
@@ -258,18 +309,22 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
             points_value
         )
         
-        # Parse and award points to participants
+        # Parse and award points to participants (Roblox usernames)
         participants_text = submission['participants']
-        participant_ids = re.findall(r'<@!?(\d+)>', participants_text)
+        
+        # Split by comma, newline, or whitespace and clean up
+        raw_usernames = re.split(r'[,\n]+', participants_text)
+        usernames = [username.strip() for username in raw_usernames if username.strip()]
         
         awarded_members = []
-        for user_id in participant_ids:
-            user_id_int = int(user_id)
-            member = await database.get_member(user_id_int)
+        awarded_discord_ids = []
+        for username in usernames:
+            member = await database.get_member_by_roblox(username)
             
             if member:
-                await database.add_points(user_id_int, points_value)
-                awarded_members.append(f"<@{user_id_int}>")
+                await database.add_points(member['discord_id'], points_value)
+                awarded_members.append(f"{username} (<@{member['discord_id']}>)")
+                awarded_discord_ids.append(member['discord_id'])
         
         # Update embed
         embed = self.approval_interaction.message.embeds[0]
@@ -292,21 +347,28 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
         await self.approval_interaction.message.edit(embed=embed, view=view)
         
         # Notify participants
-        for user_id in participant_ids:
+        event_type = submission.get('event_type', 'event')
+        for discord_id in awarded_discord_ids:
             try:
-                member = interaction.guild.get_member(int(user_id))
+                member = interaction.guild.get_member(discord_id)
                 if member:
                     await member.send(
-                        f"🎉 You've been awarded **{points_value} points** for raid #{self.submission_id}!\n"
+                        f"🎉 You've been awarded **{points_value} points** for {event_type}!\n"
                         f"Use `/xp` to check your progress."
                     )
             except:
                 pass
         
-        await interaction.followup.send(
-            f"✅ Awarded {points_value} points to {len(participant_ids)} participant(s).",
-            ephemeral=True
-        )
+        # Build result message
+        total_usernames = len(usernames)
+        result_msg = f"✅ {event_type.capitalize()} approved with {points_value} points!\n\n"
+        result_msg += f"**Points awarded to {len(awarded_members)} of {total_usernames} participant(s)**\n"
+        
+        if len(awarded_members) < total_usernames:
+            unlinked_count = total_usernames - len(awarded_members)
+            result_msg += f"⚠️ {unlinked_count} participant(s) didn't receive points (accounts not linked)"
+        
+        await interaction.followup.send(result_msg, ephemeral=True)
 
 
 class UserCommands(commands.Cog):
@@ -506,13 +568,13 @@ class UserCommands(commands.Cog):
                     ephemeral=True
                 )
     
-    @app_commands.command(name="submit-raid", description="Submit a raid event for approval")
+    @app_commands.command(name="submit-raid", description="Submit an event (patrol, raid, defense, etc.) for approval")
     async def submit_raid(
         self,
         interaction: discord.Interaction,
         proof_image: discord.Attachment
     ):
-        """Submit a raid event with proof image."""
+        """Submit an event with proof image."""
         # Check if user is registered
         member = await database.get_member(interaction.user.id)
         if not member:
@@ -530,7 +592,7 @@ class UserCommands(commands.Cog):
             )
             return
         
-        # Show modal for raid details
+        # Show modal for event details
         modal = RaidSubmissionModal(proof_image.url, interaction.user)
         await interaction.response.send_modal(modal)
     

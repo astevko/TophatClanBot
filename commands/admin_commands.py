@@ -19,26 +19,21 @@ def is_admin():
     """Check if user has High Command permissions."""
     async def predicate(interaction: discord.Interaction) -> bool:
         user_id = interaction.user.id
-        user_name = f"{interaction.user.name} (ID: {user_id})"
         
         # Method 1: Check if user ID is in whitelist
         if Config.ADMIN_USER_IDS and user_id in Config.ADMIN_USER_IDS:
-            logger.info(f"✅ Admin access granted to {user_name} via ADMIN_USER_IDS whitelist")
             return True
         
         # Method 2: Check if user has Discord administrator permission
         if interaction.user.guild_permissions.administrator:
-            logger.info(f"✅ Admin access granted to {user_name} via Discord Administrator permission")
             return True
         
         # Method 3: Check if user has the configured admin role
         admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
         if admin_role:
-            logger.info(f"✅ Admin access granted to {user_name} via '{Config.ADMIN_ROLE_NAME}' role")
             return True
         
-        # Access denied - log the attempt
-        logger.warning(f"❌ Admin access DENIED to {user_name} - attempted to use /{interaction.command.name}")
+        # Access denied
         return False
     
     return app_commands.check(predicate)
@@ -63,7 +58,6 @@ class AdminCommands(commands.Cog):
                 "❌ You cannot promote yourself! Ask High Command to promote you.",
                 ephemeral=True
             )
-            logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to promote themselves")
             return
         
         # Get member data
@@ -167,7 +161,6 @@ class AdminCommands(commands.Cog):
                 "❌ You cannot add points to yourself! Ask HICOM to adjust your points.",
                 ephemeral=True
             )
-            logger.warning(f"⚠️ {interaction.user.name} (ID: {interaction.user.id}) attempted to add {points} points to themselves")
             return
         
         # Get member data
@@ -334,7 +327,7 @@ class AdminCommands(commands.Cog):
         if is_current_admin_only:
             embed.add_field(
                 name="ℹ️ Note",
-                value="This member has an HICOM-Granted rank. Use `/promote` to change ranks manually.",
+                value="This member has an HICOM-granted rank. Use `/promote` to change ranks manually.",
                 inline=False
             )
         
@@ -382,7 +375,7 @@ class AdminCommands(commands.Cog):
             if leadership:
                 leadership_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in leadership])
                 embed.add_field(
-                    name="⚡ Leadership Ranks (HICOM-Granted)",
+                    name="⚡ Leadership Ranks (HICOM-granted)",
                     value=leadership_text,
                     inline=True
                 )
@@ -398,7 +391,7 @@ class AdminCommands(commands.Cog):
             if trial:
                 trial_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in trial])
                 embed.add_field(
-                    name="🔰 Trial/Probation (HICOM-Granted)",
+                    name="🔰 Trial/Probation (HICOM-ranted)",
                     value=trial_text,
                     inline=True
                 )

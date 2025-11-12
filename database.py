@@ -33,6 +33,7 @@ async def init_database():
             CREATE TABLE IF NOT EXISTS raid_submissions (
                 submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 submitter_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
                 participants TEXT NOT NULL,
                 start_time TEXT NOT NULL,
                 end_time TEXT NOT NULL,
@@ -130,6 +131,22 @@ async def get_member(discord_id: int) -> Optional[Dict[str, Any]]:
             JOIN rank_requirements r ON m.current_rank = r.rank_order
             WHERE m.discord_id = ?
         """, (discord_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+
+async def get_member_by_roblox(roblox_username: str) -> Optional[Dict[str, Any]]:
+    """Get a member by their Roblox username (case-insensitive)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT m.*, r.rank_name, r.points_required
+            FROM members m
+            JOIN rank_requirements r ON m.current_rank = r.rank_order
+            WHERE LOWER(m.roblox_username) = LOWER(?)
+        """, (roblox_username,)) as cursor:
             row = await cursor.fetchone()
             if row:
                 return dict(row)
@@ -262,21 +279,22 @@ async def get_next_rank(current_rank_order: int, include_admin_only: bool = Fals
 
 async def create_raid_submission(
     submitter_id: int,
+    event_type: str,
     participants: str,
     start_time: str,
     end_time: str,
     image_url: str
 ) -> int:
-    """Create a new raid submission and return its ID."""
+    """Create a new event submission and return its ID."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
             INSERT INTO raid_submissions 
-            (submitter_id, participants, start_time, end_time, image_url, status, timestamp)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?)
-        """, (submitter_id, participants, start_time, end_time, image_url, datetime.utcnow().isoformat()))
+            (submitter_id, event_type, participants, start_time, end_time, image_url, status, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+        """, (submitter_id, event_type, participants, start_time, end_time, image_url, datetime.utcnow().isoformat()))
         await db.commit()
         submission_id = cursor.lastrowid
-        logger.info(f"Created raid submission {submission_id}")
+        logger.info(f"Created {event_type} submission {submission_id}")
         return submission_id
 
 

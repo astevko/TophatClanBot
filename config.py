@@ -19,7 +19,7 @@ class Config:
     
     # Channel Configuration
     ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID", 0))
-    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "934295169321291917"))
+    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "1437675506483986552"))
     
     # Roblox Configuration
     ROBLOX_GROUP_ID = int(os.getenv("ROBLOX_GROUP_ID", 0))

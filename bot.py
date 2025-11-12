@@ -49,16 +49,17 @@ class DiscordHandler(logging.Handler):
             msg = self.format(record)
             # Add to queue for async processing
             if self.bot and self._task:
-                asyncio.create_task(self._send_log(msg, record.levelname))
+                asyncio.create_task(self._send_log(msg, record.levelname, record.name))
         except Exception:
             self.handleError(record)
     
-    async def _send_log(self, message: str, level: str):
+    async def _send_log(self, message: str, level: str, logger_name: str):
         """Send log message to Discord channel."""
         if not self.bot or not self.bot.is_ready():
             return
         
         try:
+            # All logs go to the configured log channel
             channel = self.bot.get_channel(self.channel_id)
             if not channel:
                 return
