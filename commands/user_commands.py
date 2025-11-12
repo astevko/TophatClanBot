@@ -537,14 +537,38 @@ class UserCommands(commands.Cog):
     @app_commands.command(name="xp", description="Check your current rank and points progress")
     async def xp(self, interaction: discord.Interaction):
         """Check your XP and rank progress."""
+        await interaction.response.defer(ephemeral=True)
+        
         member = await database.get_member(interaction.user.id)
         
         if not member:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ You're not registered yet! Use `/link-roblox` to link your Roblox account.",
                 ephemeral=True
             )
             return
+        
+        # Auto-sync rank from Roblox (Roblox is source of truth)
+        import roblox_api
+        sync_result = await roblox_api.sync_member_rank_from_roblox(interaction.user.id)
+        
+        rank_updated = False
+        if sync_result['success'] and sync_result['action'] == 'updated':
+            # Rank was updated from Roblox
+            await self._assign_rank_role(interaction.user, sync_result['new_rank']['rank_order'])
+            logger.info(
+                f"Auto-synced {member['roblox_username']} on /xp: "
+                f"{sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}"
+            )
+            rank_updated = True
+            
+            # Refresh member data to get updated rank
+            member = await database.get_member(interaction.user.id)
+        elif sync_result['success'] and sync_result['action'] == 'skipped':
+            # Log warning but don't fail
+            logger.info(
+                f"Sync skipped for {member['roblox_username']} on /xp: {sync_result['reason']}"
+            )
         
         # Get current rank details
         current_rank_info = await database.get_rank_by_order(member['current_rank'])
@@ -620,7 +644,15 @@ class UserCommands(commands.Cog):
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         embed.set_footer(text=f"Roblox: {member['roblox_username']}")
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # Add sync notification if rank was updated
+        if rank_updated:
+            embed.add_field(
+                name="🔄 Auto-Synced",
+                value=f"Your rank was updated from Roblox: {sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}",
+                inline=False
+            )
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     @app_commands.command(name="show-my-id", description="Get your Discord User ID for admin configuration")
     async def show_my_id(self, interaction: discord.Interaction):
@@ -679,6 +711,55 @@ class UserCommands(commands.Cog):
         """Link Discord account to Roblox username."""
         await interaction.response.defer(ephemeral=True)
         
+        # Import roblox_api here to avoid circular imports
+        import roblox_api
+        
+        # Step 1: Verify the Roblox user exists
+        user_id = await roblox_api.get_user_id_from_username(username)
+        if not user_id:
+            await interaction.followup.send(
+                f"❌ Could not find Roblox user **{username}**. Please check the spelling and try again.",
+                ephemeral=True
+            )
+            return
+        
+        # Step 2: Verify the user is in the Roblox group
+        is_member = await roblox_api.verify_group_membership(username)
+        if not is_member:
+            group_info = await roblox_api.get_group_info()
+            group_name = group_info['name'] if group_info else "the clan group"
+            await interaction.followup.send(
+                f"❌ **{username}** is not a member of {group_name}. Please join the group first, then try linking again.",
+                ephemeral=True
+            )
+            return
+        
+        # Step 3: Get their current Roblox rank
+        rank_info = await roblox_api.get_member_rank(username)
+        if not rank_info:
+            await interaction.followup.send(
+                f"❌ Could not retrieve rank information for **{username}**. Please try again later.",
+                ephemeral=True
+            )
+            return
+        
+        # Find the database rank that matches the Roblox rank
+        # Try matching by both rank_id and rank number
+        target_db_rank = await roblox_api.get_database_rank_by_roblox_id(
+            rank_info['rank_id'],
+            rank_info['rank']
+        )
+        
+        if not target_db_rank:
+            # No matching rank found - use default
+            logger.warning(
+                f"No database rank found for Roblox rank '{rank_info['rank_name']}' "
+                f"(ID: {rank_info['rank_id']}, Rank: {rank_info['rank']})"
+            )
+            target_rank_order = 1  # Default to first rank
+        else:
+            target_rank_order = target_db_rank['rank_order']
+        
         # Check if user already exists
         existing_member = await database.get_member(interaction.user.id)
         
@@ -686,27 +767,56 @@ class UserCommands(commands.Cog):
             # Update existing member
             success = await database.update_member_roblox(interaction.user.id, username)
             if success:
-                await interaction.followup.send(
-                    f"✅ Updated your Roblox username to **{username}**!",
-                    ephemeral=True
-                )
+                # Sync their rank from Roblox (override Discord rank)
+                old_rank_order = existing_member['current_rank']
+                await database.set_member_rank(interaction.user.id, target_rank_order)
+                
+                # Update Discord role
+                if old_rank_order != target_rank_order:
+                    await self._assign_rank_role(interaction.user, target_rank_order)
+                    
+                    old_rank = await database.get_rank_by_order(old_rank_order)
+                    new_rank_name = target_db_rank['rank_name'] if target_db_rank else "Pending"
+                    
+                    await interaction.followup.send(
+                        f"✅ Updated your Roblox username to **{username}**!\n"
+                        f"📊 Your current Roblox rank: **{rank_info['rank_name']}** (Rank {rank_info['rank']})\n"
+                        f"🔄 **Discord rank synced:** {old_rank['rank_name']} → {new_rank_name}",
+                        ephemeral=True
+                    )
+                    logger.info(f"Auto-synced {username} rank on link: {old_rank['rank_name']} → {new_rank_name}")
+                else:
+                    await interaction.followup.send(
+                        f"✅ Updated your Roblox username to **{username}**!\n"
+                        f"📊 Your current Roblox rank: **{rank_info['rank_name']}** (Rank {rank_info['rank']})\n"
+                        f"✓ Your ranks are already in sync!",
+                        ephemeral=True
+                    )
             else:
                 await interaction.followup.send(
                     f"❌ That Roblox username is already linked to another Discord account.",
                     ephemeral=True
                 )
         else:
-            # Create new member
+            # Create new member with rank from Roblox
             success = await database.create_member(interaction.user.id, username)
             if success:
-                # Assign initial rank role
-                await self._assign_rank_role(interaction.user, 1)
+                # Set rank to match Roblox (override default)
+                await database.set_member_rank(interaction.user.id, target_rank_order)
+                
+                # Assign rank role based on Roblox
+                await self._assign_rank_role(interaction.user, target_rank_order)
+                
+                rank_name = target_db_rank['rank_name'] if target_db_rank else "Pending"
                 
                 await interaction.followup.send(
                     f"✅ Successfully linked your account to **{username}**!\n"
-                    f"You've been assigned the **Private** rank. Use `/xp` to check your progress.",
+                    f"📊 Your current Roblox rank: **{rank_info['rank_name']}** (Rank {rank_info['rank']})\n"
+                    f"🎖️ **Discord rank set to:** {rank_name}\n"
+                    f"💡 Your ranks will stay synced automatically. Use `/xp` to check your progress.",
                     ephemeral=True
                 )
+                logger.info(f"New member {username} linked with rank {rank_name} from Roblox")
             else:
                 await interaction.followup.send(
                     f"❌ Failed to link account. That Roblox username might already be taken.",

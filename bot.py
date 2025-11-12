@@ -5,13 +5,14 @@ Main bot entry point with Discord client setup and command registration.
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import logging
 import sys
 import asyncio
 from typing import Optional
 
 from config import Config
+import roblox_api
 
 # Setup logging first
 logging.basicConfig(
@@ -131,6 +132,14 @@ class TophatClanBot(commands.Bot):
         # Initialize database
         await database.init_database()
         
+        # Verify Roblox API credentials
+        logger.info("Verifying Roblox API credentials...")
+        roblox_verified = await roblox_api.verify_roblox_credentials()
+        if roblox_verified:
+            logger.info("✅ Roblox API credentials verified successfully")
+        else:
+            logger.warning("⚠️ Roblox API verification failed - some features may not work")
+        
         # Load command modules
         await self.load_extension("commands.user_commands")
         await self.load_extension("commands.admin_commands")
@@ -144,6 +153,11 @@ class TophatClanBot(commands.Bot):
         else:
             await self.tree.sync()
             logger.info("Synced commands globally")
+        
+        # Start background tasks
+        if not self.auto_sync_ranks.is_running():
+            self.auto_sync_ranks.start()
+            logger.info("✅ Started automatic rank synchronization task")
         
         logger.info("Bot setup complete")
     
@@ -176,6 +190,110 @@ class TophatClanBot(commands.Bot):
                 f"An error occurred: {str(error)}",
                 ephemeral=True
             )
+    
+    @tasks.loop(hours=1)
+    async def auto_sync_ranks(self):
+        """Background task to automatically sync ranks every hour (Roblox is source of truth)."""
+        try:
+            logger.info("🔄 Starting automatic rank synchronization...")
+            
+            # Get all members from database
+            all_members = await self._get_all_members()
+            
+            synced = 0
+            already_synced = 0
+            skipped = 0
+            errors = 0
+            
+            for member in all_members:
+                try:
+                    result = await roblox_api.sync_member_rank_from_roblox(member['discord_id'])
+                    
+                    if not result['success']:
+                        errors += 1
+                        continue
+                    
+                    if result['action'] == 'none':
+                        already_synced += 1
+                        continue
+                    
+                    if result['action'] == 'skipped':
+                        skipped += 1
+                        continue
+                    
+                    # Update Discord role if member is in guild
+                    for guild in self.guilds:
+                        discord_member = guild.get_member(member['discord_id'])
+                        if discord_member:
+                            await self._update_discord_role(
+                                discord_member,
+                                result['old_rank']['rank_order'],
+                                result['new_rank']['rank_order']
+                            )
+                            break
+                    
+                    synced += 1
+                    logger.info(
+                        f"Auto-synced {member['roblox_username']}: "
+                        f"{result['old_rank']['rank_name']} -> {result['new_rank']['rank_name']}"
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error syncing member {member.get('discord_id')}: {e}")
+                    errors += 1
+            
+            logger.info(
+                f"✅ Automatic sync complete: {synced} updated, "
+                f"{already_synced} in sync, {skipped} skipped (no matching rank), {errors} errors"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in automatic rank sync task: {e}")
+    
+    @auto_sync_ranks.before_loop
+    async def before_auto_sync(self):
+        """Wait until bot is ready before starting sync task."""
+        await self.wait_until_ready()
+        logger.info("Bot ready, automatic sync task will start soon...")
+    
+    async def _get_all_members(self):
+        """Get all members from database."""
+        async with database.aiosqlite.connect(database.DATABASE_PATH) as db:
+            db.row_factory = database.aiosqlite.Row
+            async with db.execute("SELECT * FROM members") as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+    
+    async def _update_discord_role(self, member: discord.Member, old_rank_order: int, new_rank_order: int):
+        """Update member's Discord role when rank changes."""
+        try:
+            # Get old and new rank info
+            old_rank = await database.get_rank_by_order(old_rank_order)
+            new_rank = await database.get_rank_by_order(new_rank_order)
+            
+            if not old_rank or not new_rank:
+                return
+            
+            # Remove old rank role
+            old_role = discord.utils.get(member.guild.roles, name=old_rank['rank_name'])
+            if old_role and old_role in member.roles:
+                await member.remove_roles(old_role)
+            
+            # Add new rank role
+            new_role = discord.utils.get(member.guild.roles, name=new_rank['rank_name'])
+            if not new_role:
+                # Create the role if it doesn't exist
+                new_role = await member.guild.create_role(
+                    name=new_rank['rank_name'],
+                    reason="Clan rank role"
+                )
+            
+            await member.add_roles(new_role)
+            
+        except discord.Forbidden:
+            logger.error(f"Missing permissions to update roles for {member.name}")
+        except Exception as e:
+            logger.error(f"Error updating Discord role: {e}")
 
 
 def is_admin():

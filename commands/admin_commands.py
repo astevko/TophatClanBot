@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+from typing import Optional, List, Dict, Any
 
 import database
 from config import Config
@@ -211,7 +212,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def promote(self, interaction: discord.Interaction, member: discord.Member):
         """Promote a member to the next rank."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for promote command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in promote: {e}")
+            return
         
         # Check if user is trying to promote themselves
         if member.id == interaction.user.id:
@@ -229,6 +237,38 @@ class AdminCommands(commands.Cog):
                 ephemeral=True
             )
             return
+        
+        # FIRST: Sync rank from Roblox (Roblox is source of truth)
+        sync_result = await roblox_api.sync_member_rank_from_roblox(member.id)
+        
+        if sync_result['success'] and sync_result['action'] == 'updated':
+            # Rank was updated from Roblox before promotion
+            await self._update_member_role(
+                member,
+                sync_result['old_rank']['rank_order'],
+                sync_result['new_rank']['rank_order']
+            )
+            logger.info(
+                f"Pre-promotion sync for {member.name}: "
+                f"{sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}"
+            )
+            
+            # Show notification that rank was synced
+            await interaction.followup.send(
+                f"🔄 **Rank Synced from Roblox First**\n"
+                f"{member.mention}'s rank was updated from Roblox: "
+                f"{sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}\n\n"
+                f"Proceeding with promotion...",
+                ephemeral=True
+            )
+            
+            # Refresh member data
+            member_data = await database.get_member(member.id)
+        elif sync_result['success'] and sync_result['action'] == 'skipped':
+            # Sync was skipped (no matching rank) - log but continue with promotion
+            logger.warning(
+                f"Pre-promotion sync skipped for {member.name}: {sync_result['reason']}"
+            )
         
         # Get next rank (include admin-only ranks for manual promotion)
         next_rank = await database.get_next_rank(member_data['current_rank'], include_admin_only=True)
@@ -252,21 +292,34 @@ class AdminCommands(commands.Cog):
             )
             return
         
+        # Store the current rank for rollback if needed
+        old_rank_order = member_data['current_rank']
+        old_rank = await database.get_rank_by_order(old_rank_order)
+        
         # Update rank in database
         await database.set_member_rank(member.id, next_rank['rank_order'])
         
         # Update Discord role
-        await self._update_member_role(member, member_data['current_rank'], next_rank['rank_order'])
+        discord_role_success = False
+        try:
+            await self._update_member_role(member, member_data['current_rank'], next_rank['rank_order'])
+            discord_role_success = True
+        except Exception as e:
+            logger.error(f"Failed to update Discord role for {member.name}: {e}")
         
         # Update Roblox rank
         roblox_success = False
+        roblox_error = None
         try:
             roblox_success = await roblox_api.update_member_rank(
                 member_data['roblox_username'],
                 next_rank['roblox_group_rank_id']
             )
+            if not roblox_success:
+                roblox_error = "API returned False - check permissions or rate limits"
         except Exception as e:
-            logger.error(f"Failed to update Roblox rank: {e}")
+            logger.error(f"Failed to update Roblox rank for {member_data['roblox_username']}: {e}")
+            roblox_error = str(e)
         
         # Notify member
         dm_sent = False
@@ -283,16 +336,24 @@ class AdminCommands(commands.Cog):
             logger.error(f"Failed to send promotion DM to {member.name} (ID: {member.id}): {e}")
         
         # Send confirmation
-        roblox_status = "✅ Roblox rank updated" if roblox_success else "⚠️ Roblox rank update failed"
-        dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
+        # Determine embed color based on success/failure
+        if roblox_success and discord_role_success:
+            embed_color = discord.Color.green()
+            embed_title = "✅ Promotion Successful"
+        elif not roblox_success:
+            embed_color = discord.Color.orange()
+            embed_title = "⚠️ Promotion Complete (Roblox Sync Failed)"
+        else:
+            embed_color = discord.Color.orange()
+            embed_title = "⚠️ Promotion Complete (Discord Role Failed)"
         
         embed = discord.Embed(
-            title="✅ Promotion Successful",
+            title=embed_title,
             description=f"{member.mention} has been promoted!",
-            color=discord.Color.green()
+            color=embed_color
         )
         
-        embed.add_field(name="Previous Rank", value=member_data['rank_name'], inline=True)
+        embed.add_field(name="Previous Rank", value=old_rank['rank_name'], inline=True)
         embed.add_field(name="New Rank", value=next_rank['rank_name'], inline=True)
         embed.add_field(name="Total Points", value=str(member_data['points']), inline=True)
         
@@ -302,8 +363,34 @@ class AdminCommands(commands.Cog):
         else:
             embed.add_field(name="Rank Type", value="📊 Point-Based Rank", inline=False)
         
+        # Detailed status for each system
+        db_status = "✅ Database updated"
+        discord_status = "✅ Discord role updated" if discord_role_success else "⚠️ Discord role update failed"
+        roblox_status = "✅ Roblox rank updated" if roblox_success else f"❌ Roblox sync failed"
+        dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
+        
+        embed.add_field(name="Database", value=db_status, inline=True)
+        embed.add_field(name="Discord Role", value=discord_status, inline=True)
         embed.add_field(name="Roblox Sync", value=roblox_status, inline=True)
         embed.add_field(name="Notification", value=dm_status, inline=True)
+        
+        # Add warning if Roblox sync failed
+        if not roblox_success:
+            warning_msg = (
+                f"⚠️ **Manual Action Required**\n"
+                f"The member's rank was updated in Discord/Database but **NOT in Roblox**.\n"
+                f"• Use `/sync {member.mention}` to retry syncing to Roblox\n"
+                f"• Or manually update their rank in the Roblox group\n"
+            )
+            if roblox_error:
+                warning_msg += f"• Error: `{roblox_error}`"
+            embed.add_field(name="⚠️ Action Required", value=warning_msg, inline=False)
+            
+            # Log the desync for tracking
+            logger.warning(
+                f"DESYNC: {member.name} promoted to {next_rank['rank_name']} in Discord "
+                f"but Roblox update failed. Error: {roblox_error}"
+            )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
         
@@ -321,7 +408,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def add_points(self, interaction: discord.Interaction, member: discord.Member, points: int):
         """Add or remove points from a member."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for add-points command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in add-points: {e}")
+            return
         
         # Check if user is trying to add points to themselves
         if member.id == interaction.user.id:
@@ -447,7 +541,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def points_remove(self, interaction: discord.Interaction, member: discord.Member, points: int):
         """Remove points from a member."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for points-remove command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in points-remove: {e}")
+            return
         
         # Validate positive number
         if points <= 0:
@@ -523,7 +624,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def set_admin_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """Set the admin channel for raid submissions."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for set-admin-channel command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in set-admin-channel: {e}")
+            return
         
         # Update config
         await database.set_config("admin_channel_id", str(channel.id))
@@ -537,7 +645,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def view_pending(self, interaction: discord.Interaction):
         """View all pending raid submissions."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for view-pending command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in view-pending: {e}")
+            return
         
         pending = await database.get_pending_submissions()
         
@@ -579,7 +694,14 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def check_member(self, interaction: discord.Interaction, member: discord.Member):
         """Check a member's detailed stats."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for check-member command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in check-member: {e}")
+            return
         
         member_data = await database.get_member(member.id)
         if not member_data:
@@ -588,6 +710,31 @@ class AdminCommands(commands.Cog):
                 ephemeral=True
             )
             return
+        
+        # Auto-sync rank from Roblox (Roblox is source of truth)
+        sync_result = await roblox_api.sync_member_rank_from_roblox(member.id)
+        rank_synced = False
+        
+        if sync_result['success'] and sync_result['action'] == 'updated':
+            # Rank was updated from Roblox
+            await self._update_member_role(
+                member,
+                sync_result['old_rank']['rank_order'],
+                sync_result['new_rank']['rank_order']
+            )
+            logger.info(
+                f"Auto-synced {member_data['roblox_username']} on check-member: "
+                f"{sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}"
+            )
+            rank_synced = True
+            
+            # Refresh member data
+            member_data = await database.get_member(member.id)
+        elif sync_result['success'] and sync_result['action'] == 'skipped':
+            # Sync was skipped (no matching rank) - log but continue
+            logger.info(
+                f"Sync skipped for {member_data['roblox_username']} on check-member: {sync_result['reason']}"
+            )
         
         # Get next rank info
         next_rank = await database.get_next_rank(member_data['current_rank'])
@@ -636,15 +783,266 @@ class AdminCommands(commands.Cog):
                 inline=False
             )
         
+        # Add sync notification if rank was updated
+        if rank_synced:
+            embed.add_field(
+                name="🔄 Auto-Synced",
+                value=f"Rank was updated from Roblox: {sync_result['old_rank']['rank_name']} → {sync_result['new_rank']['rank_name']}",
+                inline=False
+            )
+        
         embed.set_thumbnail(url=member.display_avatar.url)
         
         await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="list-roblox-ranks", description="[ADMIN] View all ranks from your Roblox group with their IDs")
+    @is_admin()
+    async def list_roblox_ranks(self, interaction: discord.Interaction):
+        """List all ranks from the Roblox group with their IDs."""
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            # Interaction expired, try to send a new response
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in list-roblox-ranks: {e}")
+            return
+        
+        # Fetch ranks from Roblox
+        roblox_roles = await roblox_api.get_group_roles()
+        
+        if not roblox_roles:
+            try:
+                await interaction.followup.send(
+                    "❌ Failed to fetch ranks from Roblox. Check your group configuration and try again.",
+                    ephemeral=True
+                )
+            except discord.errors.NotFound:
+                logger.warning("Interaction expired before sending error message")
+            return
+        
+        # Get group info
+        group_info = await roblox_api.get_group_info()
+        group_name = group_info['name'] if group_info else "Unknown Group"
+        
+        # Create embed
+        embed = discord.Embed(
+            title=f"🎮 Roblox Group Ranks: {group_name}",
+            description="All ranks from your Roblox group with their IDs for database configuration",
+            color=discord.Color.blue()
+        )
+        
+        # Sort by rank number (ascending)
+        sorted_roles = sorted(roblox_roles, key=lambda x: x['rank'])
+        
+        # Split into chunks for Discord field limit
+        chunk_size = 10
+        for i in range(0, len(sorted_roles), chunk_size):
+            chunk = sorted_roles[i:i + chunk_size]
+            
+            ranks_text = ""
+            for role in chunk:
+                ranks_text += (
+                    f"**{role['name']}**\n"
+                    f"  • Rank #: `{role['rank']}`\n"
+                    f"  • Role ID: `{role['id']}`\n"
+                    f"  • Members: {role['member_count']}\n\n"
+                )
+            
+            field_name = f"Ranks {i+1}-{min(i+chunk_size, len(sorted_roles))}"
+            embed.add_field(name=field_name, value=ranks_text, inline=False)
+        
+        embed.add_field(
+            name="💡 How to Use",
+            value=(
+                "**To configure database ranks:**\n"
+                "1. Choose either `Rank #` or `Role ID` for each rank\n"
+                "2. Update `database.py` in `insert_default_ranks()`\n"
+                "3. Use the format: `(order, 'Name', points, rank_or_id, admin_only)`\n\n"
+                "**Recommendation:** Use `Rank #` for simplicity (works across groups)\n"
+                "Use `Role ID` for precision (specific to your group)"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Use /list-ranks to see your configured Discord ranks")
+        
+        try:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired before sending list-roblox-ranks response")
+        except Exception as e:
+            logger.error(f"Error sending list-roblox-ranks response: {e}")
+    
+    @app_commands.command(name="compare-ranks", description="[ADMIN] Compare Roblox ranks with configured database ranks")
+    @is_admin()
+    async def compare_ranks(self, interaction: discord.Interaction):
+        """Compare Roblox group ranks with configured database ranks."""
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            # Interaction expired, try to send a new response
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in compare-ranks: {e}")
+            return
+        
+        # Fetch Roblox ranks
+        roblox_roles = await roblox_api.get_group_roles()
+        
+        if not roblox_roles:
+            try:
+                await interaction.followup.send(
+                    "❌ Failed to fetch ranks from Roblox. Check your group configuration.",
+                    ephemeral=True
+                )
+            except discord.errors.NotFound:
+                logger.warning("Interaction expired before sending error message")
+            return
+        
+        # Get database ranks
+        db_ranks = await database.get_all_ranks()
+        
+        # Create a map of Roblox role ID -> role data
+        roblox_map = {role['id']: role for role in roblox_roles}
+        roblox_rank_map = {role['rank']: role for role in roblox_roles}
+        
+        embed = discord.Embed(
+            title="🔄 Rank Mapping Comparison",
+            description="Compare your configured Discord ranks with Roblox group ranks",
+            color=discord.Color.gold()
+        )
+        
+        # Check which database ranks have matching Roblox ranks
+        mapped = []
+        unmapped = []
+        
+        for db_rank in db_ranks:
+            roblox_id = db_rank['roblox_group_rank_id']
+            
+            # Try to find matching Roblox rank (by ID or rank number)
+            roblox_match = roblox_map.get(roblox_id) or roblox_rank_map.get(roblox_id)
+            
+            if roblox_match:
+                mapped.append({
+                    'db': db_rank,
+                    'roblox': roblox_match,
+                    'match_type': 'ID' if roblox_id == roblox_match['id'] else 'Rank #'
+                })
+            else:
+                unmapped.append(db_rank)
+        
+        # Show mapped ranks
+        if mapped:
+            mapped_text = ""
+            for item in mapped[:15]:  # Show first 15
+                db = item['db']
+                roblox = item['roblox']
+                match_icon = "🔗" if item['match_type'] == 'ID' else "🔢"
+                
+                mapped_text += (
+                    f"{match_icon} **{db['rank_name']}**\n"
+                    f"  → Roblox: {roblox['name']} (Rank #{roblox['rank']})\n"
+                )
+            
+            if len(mapped) > 15:
+                mapped_text += f"\n_...and {len(mapped) - 15} more_"
+            
+            embed.add_field(
+                name=f"✅ Mapped Ranks ({len(mapped)})",
+                value=mapped_text or "None",
+                inline=False
+            )
+        
+        # Show unmapped ranks
+        if unmapped:
+            unmapped_text = ""
+            for db_rank in unmapped[:10]:  # Show first 10
+                unmapped_text += (
+                    f"❌ **{db_rank['rank_name']}**\n"
+                    f"  Looking for: ID/Rank# `{db_rank['roblox_group_rank_id']}`\n"
+                )
+            
+            if len(unmapped) > 10:
+                unmapped_text += f"\n_...and {len(unmapped) - 10} more_"
+            
+            embed.add_field(
+                name=f"⚠️ Unmapped Ranks ({len(unmapped)})",
+                value=unmapped_text,
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🔧 Fix Unmapped Ranks",
+                value=(
+                    "1. Run `/list-roblox-ranks` to see available Roblox ranks\n"
+                    "2. Update `database.py` with correct rank IDs or numbers\n"
+                    "3. Restart the bot to apply changes"
+                ),
+                inline=False
+            )
+        
+        # Check for Roblox ranks not in database
+        db_ids = {r['roblox_group_rank_id'] for r in db_ranks}
+        missing_in_db = []
+        
+        for role in roblox_roles:
+            if role['id'] not in db_ids and role['rank'] not in db_ids:
+                missing_in_db.append(role)
+        
+        if missing_in_db:
+            missing_text = ""
+            for role in missing_in_db[:10]:
+                missing_text += (
+                    f"➕ **{role['name']}**\n"
+                    f"  Rank #: `{role['rank']}` | Role ID: `{role['id']}`\n"
+                )
+            
+            if len(missing_in_db) > 10:
+                missing_text += f"\n_...and {len(missing_in_db) - 10} more_"
+            
+            embed.add_field(
+                name=f"💡 Roblox Ranks Not in Database ({len(missing_in_db)})",
+                value=missing_text,
+                inline=False
+            )
+        
+        # Summary
+        embed.add_field(
+            name="📊 Summary",
+            value=(
+                f"✅ Mapped: {len(mapped)}\n"
+                f"⚠️ Unmapped: {len(unmapped)}\n"
+                f"💡 Missing: {len(missing_in_db)}\n"
+                f"🎮 Total Roblox Ranks: {len(roblox_roles)}\n"
+                f"💾 Total Database Ranks: {len(db_ranks)}"
+            ),
+            inline=False
+        )
+        
+        # Legend
+        embed.set_footer(text="🔗 = Matched by Role ID | 🔢 = Matched by Rank Number")
+        
+        try:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired before sending compare-ranks response")
+        except Exception as e:
+            logger.error(f"Error sending compare-ranks response: {e}")
     
     @app_commands.command(name="list-ranks", description="[ADMIN] View all rank requirements")
     @is_admin()
     async def list_ranks(self, interaction: discord.Interaction):
         """List all ranks and their requirements."""
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            # Interaction expired
+            logger.warning("Interaction expired for list-ranks command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in list-ranks: {e}")
+            return
         
         ranks = await database.get_all_ranks()
         
@@ -703,7 +1101,248 @@ class AdminCommands(commands.Cog):
         
         embed.set_footer(text="Use /promote to assign any rank manually | /check-member to see eligibility")
         
+        try:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired before sending list-ranks response")
+        except Exception as e:
+            logger.error(f"Error sending list-ranks response: {e}")
+    
+    @app_commands.command(name="verify-rank", description="[ADMIN] Check if a member's Discord rank matches their Roblox rank")
+    @app_commands.describe(member="The member to verify")
+    @is_admin()
+    async def verify_rank(self, interaction: discord.Interaction, member: discord.Member):
+        """Verify if a member's Discord rank matches their Roblox rank."""
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for verify-rank command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in verify-rank: {e}")
+            return
+        
+        # Get member from database
+        member_data = await database.get_member(member.id)
+        if not member_data:
+            await interaction.followup.send(
+                f"❌ {member.mention} is not registered. They need to use `/link-roblox` first.",
+                ephemeral=True
+            )
+            return
+        
+        # Compare ranks
+        comparison = await roblox_api.compare_ranks(member_data)
+        
+        if comparison is None:
+            # Ranks are in sync
+            discord_rank = await database.get_rank_by_order(member_data['current_rank'])
+            embed = discord.Embed(
+                title="✅ Ranks In Sync",
+                description=f"{member.mention}'s Discord and Roblox ranks match!",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Current Rank", value=discord_rank['rank_name'], inline=False)
+            embed.add_field(name="Roblox Username", value=member_data['roblox_username'], inline=False)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        if comparison['status'] == 'error':
+            await interaction.followup.send(
+                f"❌ Error checking ranks: {comparison['message']}",
+                ephemeral=True
+            )
+            return
+        
+        # Ranks don't match
+        embed = discord.Embed(
+            title="⚠️ Rank Mismatch Detected",
+            description=f"{member.mention}'s Discord and Roblox ranks don't match!",
+            color=discord.Color.orange()
+        )
+        
+        embed.add_field(
+            name="Discord Rank",
+            value=f"**{comparison['discord_rank']['rank_name']}**\n(Order: {comparison['discord_rank']['rank_order']})",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Roblox Rank",
+            value=f"**{comparison['roblox_rank']['rank_name']}**\n(Rank: {comparison['roblox_rank']['rank']})",
+            inline=True
+        )
+        
+        if comparison['target_rank']:
+            embed.add_field(
+                name="Suggested Action",
+                value=f"Update Discord rank to **{comparison['target_rank']['rank_name']}**\nUse `/sync {member.mention}` to sync",
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="⚠️ Warning",
+                value=f"No database rank matches Roblox rank ID {comparison['roblox_rank']['rank_id']}",
+                inline=False
+            )
+        
         await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="sync", description="[ADMIN] Sync a member's Discord rank with their Roblox rank")
+    @app_commands.describe(member="The member to sync (leave empty to sync all members)")
+    @is_admin()
+    async def sync_rank(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
+        """Sync Discord ranks with Roblox ranks."""
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for sync command")
+            return
+        except Exception as e:
+            logger.error(f"Error deferring interaction in sync: {e}")
+            return
+        
+        if member:
+            # Sync single member
+            result = await roblox_api.sync_member_rank_from_roblox(member.id)
+            
+            if not result['success']:
+                await interaction.followup.send(
+                    f"❌ Failed to sync {member.mention}: {result.get('error', 'Unknown error')}",
+                    ephemeral=True
+                )
+                return
+            
+            if result['action'] == 'none':
+                await interaction.followup.send(
+                    f"✅ {member.mention} is already in sync!",
+                    ephemeral=True
+                )
+                return
+            
+            if result['action'] == 'skipped':
+                await interaction.followup.send(
+                    f"⚠️ Sync skipped for {member.mention}\n"
+                    f"Reason: {result['reason']}\n\n"
+                    f"Their Roblox rank '{result['roblox_rank']['rank_name']}' doesn't have a matching Discord rank in the database.",
+                    ephemeral=True
+                )
+                return
+            
+            # Update Discord role
+            await self._update_member_role(
+                member,
+                result['old_rank']['rank_order'],
+                result['new_rank']['rank_order']
+            )
+            
+            embed = discord.Embed(
+                title="✅ Rank Synced",
+                description=f"Successfully synced {member.mention}'s rank from Roblox!",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(
+                name="Old Discord Rank",
+                value=result['old_rank']['rank_name'],
+                inline=True
+            )
+            
+            embed.add_field(
+                name="New Discord Rank",
+                value=result['new_rank']['rank_name'],
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Roblox Rank",
+                value=f"{result['roblox_rank']['rank_name']} (Rank {result['roblox_rank']['rank']})",
+                inline=False
+            )
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Log the sync
+            logger.info(
+                f"{interaction.user.name} synced {member.name}'s rank: "
+                f"{result['old_rank']['rank_name']} -> {result['new_rank']['rank_name']}"
+            )
+        
+        else:
+            # Bulk sync all members
+            initial_message = await interaction.followup.send(
+                "🔄 Starting bulk rank synchronization for all members...",
+                ephemeral=True
+            )
+            
+            # Get all members from database
+            # We need to add a function to get all members
+            all_members = await self._get_all_discord_members()
+            
+            synced = 0
+            already_synced = 0
+            skipped = 0
+            errors = 0
+            updates = []
+            
+            for db_member in all_members:
+                result = await roblox_api.sync_member_rank_from_roblox(db_member['discord_id'])
+                
+                if not result['success']:
+                    errors += 1
+                    continue
+                
+                if result['action'] == 'none':
+                    already_synced += 1
+                    continue
+                
+                if result['action'] == 'skipped':
+                    skipped += 1
+                    continue
+                
+                # Update Discord role
+                discord_member = interaction.guild.get_member(db_member['discord_id'])
+                if discord_member:
+                    await self._update_member_role(
+                        discord_member,
+                        result['old_rank']['rank_order'],
+                        result['new_rank']['rank_order']
+                    )
+                
+                synced += 1
+                updates.append(f"• {db_member['roblox_username']}: {result['old_rank']['rank_name']} → {result['new_rank']['rank_name']}")
+            
+            embed = discord.Embed(
+                title="✅ Bulk Sync Complete",
+                description=f"Synchronized ranks for all registered members",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="✅ Synced", value=str(synced), inline=True)
+            embed.add_field(name="✓ Already In Sync", value=str(already_synced), inline=True)
+            embed.add_field(name="⚠️ Skipped", value=str(skipped), inline=True)
+            embed.add_field(name="❌ Errors", value=str(errors), inline=True)
+            
+            if updates:
+                updates_text = "\n".join(updates[:10])  # Show first 10
+                if len(updates) > 10:
+                    updates_text += f"\n... and {len(updates) - 10} more"
+                embed.add_field(name="Updates Made", value=updates_text, inline=False)
+            
+            await initial_message.edit(content=None, embed=embed)
+            
+            logger.info(
+                f"{interaction.user.name} performed bulk sync: "
+                f"{synced} updated, {already_synced} in sync, {skipped} skipped, {errors} errors"
+            )
+    
+    async def _get_all_discord_members(self) -> List[Dict[str, Any]]:
+        """Get all members from database. Helper function for bulk operations."""
+        async with database.aiosqlite.connect(database.DATABASE_PATH) as db:
+            db.row_factory = database.aiosqlite.Row
+            async with db.execute("SELECT * FROM members") as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
     
     async def _update_member_role(self, member: discord.Member, old_rank_order: int, new_rank_order: int):
         """Update member's Discord role when promoted."""

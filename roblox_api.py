@@ -251,3 +251,187 @@ async def test_roblox_connection() -> Dict[str, Any]:
     
     return results
 
+
+async def verify_roblox_credentials() -> bool:
+    """
+    Verify that Roblox credentials are valid and have proper permissions.
+    This should be called during bot startup.
+    """
+    try:
+        # Test basic API access
+        group_info = await get_group_info()
+        if not group_info:
+            logger.error("Failed to retrieve group info - check ROBLOX_GROUP_ID")
+            return False
+        
+        logger.info(f"✅ Connected to Roblox group: {group_info['name']}")
+        
+        # Test group roles access
+        roles = await get_group_roles()
+        if not roles:
+            logger.error("Failed to retrieve group roles")
+            return False
+        
+        logger.info(f"✅ Retrieved {len(roles)} group roles")
+        
+        # Check if credentials are configured
+        if not Config.ROBLOX_API_KEY and not Config.ROBLOX_COOKIE:
+            logger.warning("⚠️ No Roblox authentication credentials configured - rank updates will not work")
+            return False
+        
+        logger.info("✅ Roblox authentication credentials configured")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to verify Roblox credentials: {e}")
+        return False
+
+
+async def get_database_rank_by_roblox_id(roblox_rank_id: int, roblox_rank_number: int = None):
+    """
+    Get the database rank that corresponds to a Roblox group rank ID.
+    Falls back to matching by rank number if ID doesn't match.
+    """
+    # Import here to avoid circular imports
+    import database
+    
+    ranks = await database.get_all_ranks()
+    
+    # First try: Match by exact Roblox rank ID
+    for rank in ranks:
+        if rank['roblox_group_rank_id'] == roblox_rank_id:
+            return rank
+    
+    # Second try: Match by rank number (if provided)
+    # This handles cases where the database uses rank numbers instead of role IDs
+    if roblox_rank_number is not None:
+        for rank in ranks:
+            if rank['roblox_group_rank_id'] == roblox_rank_number:
+                return rank
+    
+    # No match found
+    logger.warning(f"No database rank found for Roblox rank ID {roblox_rank_id} (rank number: {roblox_rank_number})")
+    return None
+
+
+async def compare_ranks(discord_member_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Compare a member's Discord rank with their Roblox rank.
+    Returns a dict with comparison results if there's a mismatch, None if in sync.
+    """
+    try:
+        # Get their current Roblox rank
+        roblox_rank = await get_member_rank(discord_member_data['roblox_username'])
+        if not roblox_rank:
+            return {
+                'status': 'error',
+                'message': f"Could not fetch Roblox rank for {discord_member_data['roblox_username']}"
+            }
+        
+        # Import here to avoid circular imports
+        import database
+        
+        # Get the Discord rank info
+        discord_rank = await database.get_rank_by_order(discord_member_data['current_rank'])
+        if not discord_rank:
+            return {
+                'status': 'error',
+                'message': 'Could not find Discord rank in database'
+            }
+        
+        # Find the corresponding database rank for the Roblox rank
+        # Try matching by both rank_id and rank number
+        target_rank = await get_database_rank_by_roblox_id(
+            roblox_rank['rank_id'],
+            roblox_rank['rank']
+        )
+        
+        # Check if ranks match (by rank_id OR rank number)
+        if (discord_rank['roblox_group_rank_id'] == roblox_rank['rank_id'] or
+            discord_rank['roblox_group_rank_id'] == roblox_rank['rank']):
+            return None  # Ranks are in sync
+        
+        return {
+            'status': 'mismatch',
+            'discord_rank': discord_rank,
+            'roblox_rank': roblox_rank,
+            'target_rank': target_rank,
+            'member_data': discord_member_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error comparing ranks for {discord_member_data.get('roblox_username', 'unknown')}: {e}")
+        return {
+            'status': 'error',
+            'message': str(e)
+        }
+
+
+async def sync_member_rank_from_roblox(discord_id: int) -> Dict[str, Any]:
+    """
+    Sync a member's Discord rank with their current Roblox rank.
+    Returns a dict with the sync results.
+    """
+    # Import here to avoid circular imports
+    import database
+    
+    try:
+        # Get member from database
+        member = await database.get_member(discord_id)
+        if not member:
+            return {
+                'success': False,
+                'error': 'Member not found in database'
+            }
+        
+        # Compare ranks
+        comparison = await compare_ranks(member)
+        
+        if comparison is None:
+            # Already in sync
+            return {
+                'success': True,
+                'action': 'none',
+                'message': 'Ranks already in sync'
+            }
+        
+        if comparison['status'] == 'error':
+            return {
+                'success': False,
+                'error': comparison['message']
+            }
+        
+        # Ranks don't match - update Discord rank
+        target_rank = comparison['target_rank']
+        if not target_rank:
+            # No matching rank found - log and skip instead of erroring
+            logger.warning(
+                f"Cannot sync {member['roblox_username']}: "
+                f"No database rank matches Roblox rank '{comparison['roblox_rank']['rank_name']}' "
+                f"(ID: {comparison['roblox_rank']['rank_id']}, Rank: {comparison['roblox_rank']['rank']})"
+            )
+            return {
+                'success': True,
+                'action': 'skipped',
+                'reason': f"No database rank matches Roblox rank '{comparison['roblox_rank']['rank_name']}'",
+                'roblox_rank': comparison['roblox_rank']
+            }
+        
+        # Update the rank in database
+        await database.set_member_rank(discord_id, target_rank['rank_order'])
+        
+        return {
+            'success': True,
+            'action': 'updated',
+            'old_rank': comparison['discord_rank'],
+            'new_rank': target_rank,
+            'roblox_rank': comparison['roblox_rank']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error syncing member rank: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
