@@ -1451,6 +1451,79 @@ class AdminCommands(commands.Cog):
                 f"{synced} updated, {already_synced} in sync, {skipped} skipped, {errors} errors"
             )
     
+    @app_commands.command(name="set-discord-log-level", description="[ADMIN] Set minimum log level sent to Discord")
+    @app_commands.describe(level="Minimum log level: CRITICAL, ERROR, WARNING, or NONE")
+    @app_commands.choices(level=[
+        app_commands.Choice(name="Critical Only", value="CRITICAL"),
+        app_commands.Choice(name="Error and Critical", value="ERROR"),
+        app_commands.Choice(name="Warning, Error, and Critical", value="WARNING"),
+        app_commands.Choice(name="None (Disable Discord Logging)", value="NONE")
+    ])
+    @is_admin()
+    async def set_discord_log_level(self, interaction: discord.Interaction, level: str):
+        """Set the minimum log level that gets sent to Discord logging channel."""
+        # Defer response for processing time
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for set-discord-log-level command - user: {interaction.user.name}")
+                return
+        
+        try:
+            # Import DiscordHandler to modify its class variable
+            from bot import DiscordHandler
+            
+            # Store old level for logging
+            old_level = DiscordHandler.min_discord_level
+            
+            # Set new level
+            DiscordHandler.min_discord_level = level
+            
+            # Create response embed
+            level_descriptions = {
+                'CRITICAL': 'Only CRITICAL logs (most severe issues)',
+                'ERROR': 'ERROR and CRITICAL logs only',
+                'WARNING': 'WARNING, ERROR, and CRITICAL logs',
+                'NONE': 'Disabled - no logs sent to Discord'
+            }
+            
+            embed = discord.Embed(
+                title="✅ Discord Log Level Updated",
+                description=f"Discord logging channel will now show: **{level_descriptions.get(level, level)}**",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="Previous Level", value=old_level, inline=True)
+            embed.add_field(name="New Level", value=level, inline=True)
+            
+            # Add helpful info
+            if level == 'NONE':
+                embed.add_field(
+                    name="ℹ️ Note",
+                    value="Discord logging is now disabled. All logs still go to `bot.log` file.",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="ℹ️ Note",
+                    value="This change is immediate. All logs still go to `bot.log` file.",
+                    inline=False
+                )
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            logger.info(
+                f"{interaction.user.name} changed Discord log level from {old_level} to {level}"
+            )
+        
+        except Exception as e:
+            logger.error(f"Error setting Discord log level: {e}")
+            await interaction.followup.send(
+                f"❌ Error setting log level: {str(e)}",
+                ephemeral=True
+            )
+    
     async def _get_all_discord_members(self) -> List[Dict[str, Any]]:
         """Get all members from database. Helper function for bulk operations."""
         async with database.aiosqlite.connect(database.DATABASE_PATH) as db:

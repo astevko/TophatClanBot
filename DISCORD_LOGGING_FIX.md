@@ -78,6 +78,21 @@ if level not in ['WARNING', 'ERROR', 'CRITICAL']:
 - All logs still captured in `bot.log` file
 - Cleaner, more focused Discord notifications
 
+### Fix 3: Suppress Discord.py HTTP Rate Limit Warnings
+
+**Added:** Set discord.http logger to ERROR level to suppress rate limit warnings
+
+```python
+# Suppress Discord HTTP rate limit warnings (they're handled gracefully)
+logging.getLogger('discord.http').setLevel(logging.ERROR)
+```
+
+**Benefits:**
+- Eliminates noise from Discord.py's internal rate limit handling
+- Discord.py already handles 429 errors gracefully with automatic retries
+- Reduces log file size
+- Cleaner log output for debugging actual issues
+
 ---
 
 ## Impact
@@ -232,6 +247,7 @@ If logs are in bot.log but not Discord:
 ## Files Modified
 
 - ✅ `/Users/julianstevko/TophatClanBot/bot.py`
+  - Line 34: Added discord.http logger suppression
   - Line 73-74: Changed log level filter to exclude INFO
   - Line 103: Increased delay from 0.25s to 1.1s
 
@@ -286,13 +302,15 @@ grep -o "WARNING\|ERROR\|CRITICAL" bot.log | sort | uniq -c
 The constant rate limiting was caused by:
 1. **Too short delay** (0.25s instead of 1.1s)
 2. **Too many INFO logs** sent to Discord
+3. **Noisy discord.py rate limit warnings** in logs
 
 **Solution:**
 1. ✅ Increased delay to 1.1 seconds
 2. ✅ Filter out INFO logs from Discord
-3. ✅ All logs still captured in bot.log
+3. ✅ Suppress discord.http logger warnings
+4. ✅ All logs still captured in bot.log
 
-**Result:** No more constant rate limiting! 🎉
+**Result:** No more constant rate limiting + cleaner logs! 🎉
 
 ---
 

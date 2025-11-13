@@ -30,6 +30,9 @@ sanitizing_formatter = SanitizingFormatter('%(asctime)s - %(name)s - %(levelname
 for handler in logging.getLogger().handlers:
     handler.setFormatter(sanitizing_formatter)
 
+# Suppress Discord HTTP rate limit warnings (they're handled gracefully)
+logging.getLogger('discord.http').setLevel(logging.ERROR)
+
 logger = logging.getLogger(__name__)
 
 # Import appropriate database module based on configuration
@@ -43,6 +46,10 @@ else:
 
 class DiscordHandler(logging.Handler):
     """Custom logging handler that sends logs to a Discord channel."""
+    
+    # Class variable to control minimum log level sent to Discord
+    # Options: 'NONE', 'CRITICAL', 'ERROR', 'WARNING'
+    min_discord_level = 'WARNING'
     
     def __init__(self, bot: Optional['TophatClanBot'] = None, channel_id: Optional[int] = None):
         super().__init__()
@@ -67,10 +74,19 @@ class DiscordHandler(logging.Handler):
             return
         
         try:
-            # Only send WARNING, ERROR, and CRITICAL to Discord
-            # INFO and DEBUG logs are excluded to reduce rate limiting
-            # All logs still go to bot.log file
-            if level not in ['WARNING', 'ERROR', 'CRITICAL']:
+            # Check if Discord logging is disabled
+            if DiscordHandler.min_discord_level == 'NONE':
+                return
+            
+            # Filter based on minimum log level setting
+            # Level hierarchy: DEBUG < INFO < WARNING < ERROR < CRITICAL
+            allowed_levels = {
+                'CRITICAL': ['CRITICAL'],
+                'ERROR': ['ERROR', 'CRITICAL'],
+                'WARNING': ['WARNING', 'ERROR', 'CRITICAL'],
+            }
+            
+            if level not in allowed_levels.get(DiscordHandler.min_discord_level, []):
                 return
             
             # All logs go to the configured log channel

@@ -528,6 +528,54 @@ Use /promote to assign any rank manually | /check-member to see eligibility
 
 ---
 
+### `/set-discord-log-level`
+
+**Control which log levels are sent to Discord logging channel**
+
+**Usage:**
+```
+/set-discord-log-level level: [choice]
+```
+
+**Parameters:**
+- `level` - Choose from:
+  - **Critical Only** - Only CRITICAL logs (most severe issues)
+  - **Error and Critical** - ERROR and CRITICAL logs only
+  - **Warning, Error, and Critical** - All warnings and errors (default)
+  - **None (Disable)** - Disable Discord logging completely
+
+**What it does:**
+- Changes which log messages are sent to Discord logging channel
+- Takes effect immediately (no restart needed)
+- All logs still saved to `bot.log` file regardless of setting
+
+**Example Output:**
+```
+✅ Discord Log Level Updated
+
+Discord logging channel will now show: ERROR and CRITICAL logs only
+
+Previous Level: WARNING
+New Level: ERROR
+
+ℹ️ Note
+This change is immediate. All logs still go to bot.log file.
+```
+
+**Use Cases:**
+- **Error and Critical** - Reduce noise, only show actual errors
+- **Critical Only** - Production monitoring, only critical issues
+- **None** - Temporarily disable during bulk operations or maintenance
+- **Warning, Error, Critical** - Default, show all important messages
+
+**Tips:**
+- Change resets to WARNING on bot restart
+- Useful for reducing Discord channel clutter
+- All logs always saved to bot.log regardless
+- Can be changed anytime without affecting bot operation
+
+---
+
 ## Command Tips
 
 ### General Tips
@@ -701,6 +749,7 @@ Use /promote to assign any rank manually | /check-member to see eligibility
 | `/view-pending` | See submissions | `/view-pending` |
 | `/check-member` | View stats | `/check-member @user` |
 | `/list-ranks` | Show all ranks | `/list-ranks` |
+| `/set-discord-log-level` | Control Discord logs | `/set-discord-log-level ERROR` |
 
 ---
 
