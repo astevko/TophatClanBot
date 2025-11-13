@@ -171,7 +171,7 @@ class TophatClanBot(commands.Bot):
             guild = discord.Object(id=self.guild_id)
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
-            logger.info(f"Synced commands to guild {self.guild_id}")
+            logger.debug(f"Synced commands to guild {self.guild_id}")
         else:
             await self.tree.sync()
             logger.info("Synced commands globally")
@@ -185,8 +185,8 @@ class TophatClanBot(commands.Bot):
     
     async def on_ready(self):
         """Called when the bot is ready."""
-        logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
-        logger.info(f"Connected to {len(self.guilds)} guild(s)")
+        logger.debug(f"Logged in as {self.user} (ID: {self.user.id})")
+        logger.debug(f"Connected to {len(self.guilds)} guild(s)")
         
         # Set bot status
         await self.change_presence(
@@ -255,7 +255,7 @@ class TophatClanBot(commands.Bot):
                             break
                     
                     synced += 1
-                    logger.debug(
+                    logger.info(
                         f"Auto-synced {member['roblox_username']}: "
                         f"{result['old_rank']['rank_name']} -> {result['new_rank']['rank_name']}"
                     )
@@ -306,7 +306,7 @@ class TophatClanBot(commands.Bot):
                     await member.remove_roles(old_role)
                 except discord.HTTPException as e:
                     if e.status == 429:
-                        logger.warning(f"Rate limited when removing role - retrying after delay")
+                        logger.debug(f"Rate limited when removing role - retrying after delay")
                         await asyncio.sleep(1)
                         await member.remove_roles(old_role)
                     else:
@@ -323,7 +323,7 @@ class TophatClanBot(commands.Bot):
                     )
                 except discord.HTTPException as e:
                     if e.status == 429:
-                        logger.warning(f"Rate limited when creating role - retrying after delay")
+                        logger.debug(f"Rate limited when creating role - retrying after delay")
                         await asyncio.sleep(1)
                         new_role = await member.guild.create_role(
                             name=new_rank['rank_name'],
@@ -336,7 +336,7 @@ class TophatClanBot(commands.Bot):
                 await member.add_roles(new_role)
             except discord.HTTPException as e:
                 if e.status == 429:
-                    logger.warning(f"Rate limited when adding role - retrying after delay")
+                    logger.debug(f"Rate limited when adding role - retrying after delay")
                     await asyncio.sleep(1)
                     await member.add_roles(new_role)
                 else:
