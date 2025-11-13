@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+import asyncio
 from typing import Optional
 import re
 
@@ -213,6 +214,21 @@ class PromotionApprovalView(discord.ui.View):
         # Update Discord role (simplified - you can expand this)
         # await self._update_member_role(member, member_data['current_rank'], self.next_rank_order)
         
+        # Update Roblox rank
+        import roblox_api
+        roblox_success = False
+        try:
+            roblox_success = await roblox_api.update_member_rank(
+                member_data['roblox_username'],
+                next_rank['roblox_group_rank_id']
+            )
+            if roblox_success:
+                logger.info(f"Updated Roblox rank for {member_data['roblox_username']} to {next_rank['rank_name']}")
+            else:
+                logger.warning(f"Failed to update Roblox rank for {member_data['roblox_username']}")
+        except Exception as e:
+            logger.error(f"Error updating Roblox rank during auto-promotion: {e}")
+        
         # Notify member
         try:
             await member.send(
@@ -228,15 +244,22 @@ class PromotionApprovalView(discord.ui.View):
         embed.title = "✅ Promotion Approved"
         embed.add_field(name="Approved By", value=interaction.user.mention, inline=False)
         
+        # Add Roblox sync status
+        roblox_status = "✅ Roblox rank updated" if roblox_success else "⚠️ Roblox sync failed"
+        embed.add_field(name="Roblox Sync", value=roblox_status, inline=False)
+        
         # Disable buttons
         for item in self.children:
             item.disabled = True
         
         await interaction.message.edit(embed=embed, view=self)
-        await interaction.followup.send(
-            f"✅ {member.mention} has been promoted to **{next_rank['rank_name']}**!",
-            ephemeral=True
-        )
+        
+        # Send confirmation with sync status
+        confirmation_msg = f"✅ {member.mention} has been promoted to **{next_rank['rank_name']}**!"
+        if not roblox_success:
+            confirmation_msg += f"\n⚠️ Roblox rank update failed. Use `/sync {member.mention}` to retry."
+        
+        await interaction.followup.send(confirmation_msg, ephemeral=True)
     
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, emoji="❌")
     async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -537,7 +560,18 @@ class UserCommands(commands.Cog):
     @app_commands.command(name="xp", description="Check your current rank and points progress")
     async def xp(self, interaction: discord.Interaction):
         """Check your XP and rank progress."""
-        await interaction.response.defer(ephemeral=True)
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for xp command - user: {interaction.user.name}")
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in xp: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in xp command")
+            return
         
         member = await database.get_member(interaction.user.id)
         
@@ -657,7 +691,18 @@ class UserCommands(commands.Cog):
     @app_commands.command(name="show-my-id", description="Get your Discord User ID for admin configuration")
     async def show_my_id(self, interaction: discord.Interaction):
         """Show user their Discord ID."""
-        await interaction.response.defer(ephemeral=True)
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for show-my-id command - user: {interaction.user.name}")
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in show-my-id: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in show-my-id command")
+            return
         
         embed = discord.Embed(
             title="📋 Your Discord User ID",
@@ -670,7 +715,18 @@ class UserCommands(commands.Cog):
     @app_commands.command(name="leaderboard", description="View the top clan members by points")
     async def leaderboard(self, interaction: discord.Interaction):
         """Display the clan leaderboard."""
-        await interaction.response.defer()
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer()
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for leaderboard command - user: {interaction.user.name}")
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in leaderboard: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in leaderboard command")
+            return
         
         members = await database.get_leaderboard(10)
         
@@ -709,7 +765,18 @@ class UserCommands(commands.Cog):
     @app_commands.describe(username="Your Roblox username")
     async def link_roblox(self, interaction: discord.Interaction, username: str):
         """Link Discord account to Roblox username."""
-        await interaction.response.defer(ephemeral=True)
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for link-roblox command - user: {interaction.user.name}")
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in link-roblox: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in link-roblox command")
+            return
         
         # Import roblox_api here to avoid circular imports
         import roblox_api
@@ -869,12 +936,35 @@ class UserCommands(commands.Cog):
             except discord.Forbidden:
                 logger.error("Bot doesn't have permission to create roles")
                 return
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    logger.warning(f"Rate limited when creating role - retrying after delay")
+                    await asyncio.sleep(1)
+                    try:
+                        role = await member.guild.create_role(
+                            name=rank_info['rank_name'],
+                            reason="Clan rank role"
+                        )
+                    except Exception:
+                        logger.error("Failed to create role after retry")
+                        return
+                else:
+                    logger.error(f"HTTP error creating role: {e}")
+                    return
         
         # Assign the role
         try:
             await member.add_roles(role)
         except discord.Forbidden:
             logger.error("Bot doesn't have permission to assign roles")
+        except discord.HTTPException as e:
+            if e.status == 429:
+                logger.warning(f"Rate limited when adding role - retrying after delay")
+                await asyncio.sleep(1)
+                try:
+                    await member.add_roles(role)
+                except Exception:
+                    logger.error("Failed to add role after retry")
     
     def _create_progress_bar(self, current: int, target: int, base: int = 0) -> str:
         """Create a visual progress bar."""

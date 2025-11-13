@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+import asyncio
 from typing import Optional, List, Dict, Any
 
 import database
@@ -212,13 +213,25 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def promote(self, interaction: discord.Interaction, member: discord.Member):
         """Promote a member to the next rank."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for promote command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in promote: {e}")
+        # Check if interaction is still valid before deferring
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for promote command - user: {interaction.user.name}, target: {member.name}")
+                # Try to send a DM to the user to inform them
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/promote {member.mention}` command timed out. This can happen due to network latency. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in promote: {e}")
+                return
+        else:
+            logger.warning(f"Interaction already responded to in promote command")
             return
         
         # Check if user is trying to promote themselves
@@ -408,13 +421,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def add_points(self, interaction: discord.Interaction, member: discord.Member, points: int):
         """Add or remove points from a member."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for add-points command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in add-points: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for add-points command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/add-points` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in add-points: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in add-points command")
             return
         
         # Check if user is trying to add points to themselves
@@ -541,13 +564,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def points_remove(self, interaction: discord.Interaction, member: discord.Member, points: int):
         """Remove points from a member."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for points-remove command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in points-remove: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for points-remove command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/points-remove` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in points-remove: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in points-remove command")
             return
         
         # Validate positive number
@@ -624,13 +657,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def set_admin_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """Set the admin channel for raid submissions."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for set-admin-channel command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in set-admin-channel: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for set-admin-channel command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/set-admin-channel` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in set-admin-channel: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in set-admin-channel command")
             return
         
         # Update config
@@ -645,13 +688,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def view_pending(self, interaction: discord.Interaction):
         """View all pending raid submissions."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for view-pending command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in view-pending: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for view-pending command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/view-pending` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in view-pending: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in view-pending command")
             return
         
         pending = await database.get_pending_submissions()
@@ -694,13 +747,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def check_member(self, interaction: discord.Interaction, member: discord.Member):
         """Check a member's detailed stats."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for check-member command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in check-member: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for check-member command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/check-member` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in check-member: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in check-member command")
             return
         
         member_data = await database.get_member(member.id)
@@ -799,13 +862,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def list_roblox_ranks(self, interaction: discord.Interaction):
         """List all ranks from the Roblox group with their IDs."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            # Interaction expired, try to send a new response
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in list-roblox-ranks: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for list-roblox-ranks command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/list-roblox-ranks` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in list-roblox-ranks: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in list-roblox-ranks command")
             return
         
         # Fetch ranks from Roblox
@@ -878,13 +951,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def compare_ranks(self, interaction: discord.Interaction):
         """Compare Roblox group ranks with configured database ranks."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            # Interaction expired, try to send a new response
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in compare-ranks: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for compare-ranks command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/compare-ranks` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in compare-ranks: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in compare-ranks command")
             return
         
         # Fetch Roblox ranks
@@ -1034,14 +1117,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def list_ranks(self, interaction: discord.Interaction):
         """List all ranks and their requirements."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            # Interaction expired
-            logger.warning("Interaction expired for list-ranks command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in list-ranks: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for list-ranks command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/list-ranks` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in list-ranks: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in list-ranks command")
             return
         
         ranks = await database.get_all_ranks()
@@ -1113,13 +1205,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def verify_rank(self, interaction: discord.Interaction, member: discord.Member):
         """Verify if a member's Discord rank matches their Roblox rank."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for verify-rank command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in verify-rank: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for verify-rank command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/verify-rank` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in verify-rank: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in verify-rank command")
             return
         
         # Get member from database
@@ -1193,13 +1295,23 @@ class AdminCommands(commands.Cog):
     @is_admin()
     async def sync_rank(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
         """Sync Discord ranks with Roblox ranks."""
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except discord.errors.NotFound:
-            logger.warning("Interaction expired for sync command")
-            return
-        except Exception as e:
-            logger.error(f"Error deferring interaction in sync: {e}")
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(f"Interaction expired for sync command - user: {interaction.user.name}")
+                try:
+                    await interaction.user.send(
+                        f"⚠️ Your `/sync` command timed out. Please try again."
+                    )
+                except:
+                    pass
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in sync: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in sync command")
             return
         
         if member:
@@ -1311,6 +1423,9 @@ class AdminCommands(commands.Cog):
                 
                 synced += 1
                 updates.append(f"• {db_member['roblox_username']}: {result['old_rank']['rank_name']} → {result['new_rank']['rank_name']}")
+                
+                # Rate limit protection: Add delay between role updates to avoid hitting Discord rate limits
+                await asyncio.sleep(0.5)
             
             embed = discord.Embed(
                 title="✅ Bulk Sync Complete",
@@ -1360,6 +1475,16 @@ class AdminCommands(commands.Cog):
                 await member.remove_roles(old_role)
             except discord.Forbidden:
                 logger.error("Bot doesn't have permission to remove roles")
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    logger.warning(f"Rate limited when removing role from {member.name} - will retry")
+                    await asyncio.sleep(1)
+                    try:
+                        await member.remove_roles(old_role)
+                    except Exception:
+                        pass
+                else:
+                    logger.error(f"HTTP error removing role: {e}")
         
         # Add new rank role
         new_role = discord.utils.get(member.guild.roles, name=new_rank['rank_name'])
@@ -1373,11 +1498,32 @@ class AdminCommands(commands.Cog):
             except discord.Forbidden:
                 logger.error("Bot doesn't have permission to create roles")
                 return
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    logger.warning(f"Rate limited when creating role - will retry")
+                    await asyncio.sleep(1)
+                    try:
+                        new_role = await member.guild.create_role(name=new_rank['rank_name'], reason="Clan rank role")
+                    except Exception:
+                        return
+                else:
+                    logger.error(f"HTTP error creating role: {e}")
+                    return
         
         try:
             await member.add_roles(new_role)
         except discord.Forbidden:
             logger.error("Bot doesn't have permission to assign roles")
+        except discord.HTTPException as e:
+            if e.status == 429:
+                logger.warning(f"Rate limited when adding role to {member.name} - will retry")
+                await asyncio.sleep(1)
+                try:
+                    await member.add_roles(new_role)
+                except Exception:
+                    pass
+            else:
+                logger.error(f"HTTP error adding role: {e}")
 
 
 async def setup(bot):

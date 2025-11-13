@@ -86,6 +86,16 @@ class DiscordHandler(logging.Handler):
             embed.set_footer(text=level)
             
             await channel.send(embed=embed)
+            
+            # Rate limit protection: Add small delay after sending to avoid 429 errors
+            await asyncio.sleep(0.25)
+            
+        except discord.errors.HTTPException as e:
+            # Handle rate limiting gracefully
+            if e.status == 429:
+                print(f"Discord rate limited - skipping log message", file=sys.stderr)
+            else:
+                print(f"Failed to send log to Discord: {e}", file=sys.stderr)
         except Exception as e:
             # Don't let Discord logging errors break the bot
             print(f"Failed to send log to Discord: {e}", file=sys.stderr)
@@ -238,6 +248,9 @@ class TophatClanBot(commands.Bot):
                         f"{result['old_rank']['rank_name']} -> {result['new_rank']['rank_name']}"
                     )
                     
+                    # Rate limit protection: Add small delay between role updates
+                    await asyncio.sleep(0.5)
+                    
                 except Exception as e:
                     logger.error(f"Error syncing member {member.get('discord_id')}: {e}")
                     errors += 1
@@ -277,18 +290,45 @@ class TophatClanBot(commands.Bot):
             # Remove old rank role
             old_role = discord.utils.get(member.guild.roles, name=old_rank['rank_name'])
             if old_role and old_role in member.roles:
-                await member.remove_roles(old_role)
+                try:
+                    await member.remove_roles(old_role)
+                except discord.HTTPException as e:
+                    if e.status == 429:
+                        logger.warning(f"Rate limited when removing role - retrying after delay")
+                        await asyncio.sleep(1)
+                        await member.remove_roles(old_role)
+                    else:
+                        raise
             
             # Add new rank role
             new_role = discord.utils.get(member.guild.roles, name=new_rank['rank_name'])
             if not new_role:
                 # Create the role if it doesn't exist
-                new_role = await member.guild.create_role(
-                    name=new_rank['rank_name'],
-                    reason="Clan rank role"
-                )
+                try:
+                    new_role = await member.guild.create_role(
+                        name=new_rank['rank_name'],
+                        reason="Clan rank role"
+                    )
+                except discord.HTTPException as e:
+                    if e.status == 429:
+                        logger.warning(f"Rate limited when creating role - retrying after delay")
+                        await asyncio.sleep(1)
+                        new_role = await member.guild.create_role(
+                            name=new_rank['rank_name'],
+                            reason="Clan rank role"
+                        )
+                    else:
+                        raise
             
-            await member.add_roles(new_role)
+            try:
+                await member.add_roles(new_role)
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    logger.warning(f"Rate limited when adding role - retrying after delay")
+                    await asyncio.sleep(1)
+                    await member.add_roles(new_role)
+                else:
+                    raise
             
         except discord.Forbidden:
             logger.error(f"Missing permissions to update roles for {member.name}")

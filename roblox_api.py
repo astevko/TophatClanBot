@@ -115,12 +115,17 @@ async def update_member_rank(username: str, new_rank_id: int) -> bool:
             headers["x-api-key"] = Config.ROBLOX_API_KEY
             
             # Open Cloud API endpoint
+            # Note: Open Cloud API expects full resource path for role
             async with aiohttp.ClientSession() as session:
                 url = f"{ROBLOX_API_BASE}/cloud/v2/groups/{Config.ROBLOX_GROUP_ID}/memberships/{user_id}"
+                
+                # Roblox Open Cloud API expects role as a full resource path
+                role_path = f"groups/{Config.ROBLOX_GROUP_ID}/roles/{new_rank_id}"
+                
                 async with session.patch(
                     url,
                     headers=headers,
-                    json={"role": str(new_rank_id)}
+                    json={"role": role_path}
                 ) as response:
                     if response.status in [200, 204]:
                         logger.info(f"Successfully updated rank for {username} to {new_rank_id}")
