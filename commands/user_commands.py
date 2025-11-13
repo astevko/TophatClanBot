@@ -955,47 +955,53 @@ class UserCommands(commands.Cog):
         if not rank_info:
             return
         
-        # Find or create the role
+        # Find or create the role with retry logic
         role = discord.utils.get(member.guild.roles, name=rank_info['rank_name'])
         if not role:
-            # Create the role if it doesn't exist
+            # Create the role if it doesn't exist with retry logic
+            for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                try:
+                    role = await member.guild.create_role(
+                        name=rank_info['rank_name'],
+                        reason="Clan rank role"
+                    )
+                    break
+                except discord.Forbidden:
+                    logger.error("Bot doesn't have permission to create roles")
+                    return
+                except discord.HTTPException as e:
+                    if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                        # Exponential backoff: 1s, 2s, 4s, etc.
+                        delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited when creating role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                        await asyncio.sleep(delay)
+                    elif e.status == 429:
+                        logger.error(f"Failed to create role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                        return
+                    else:
+                        logger.error(f"HTTP error creating role: {e}")
+                        return
+        
+        # Assign the role with retry logic
+        for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
             try:
-                role = await member.guild.create_role(
-                    name=rank_info['rank_name'],
-                    reason="Clan rank role"
-                )
+                await member.add_roles(role)
+                break
             except discord.Forbidden:
-                logger.error("Bot doesn't have permission to create roles")
+                logger.error("Bot doesn't have permission to assign roles")
                 return
             except discord.HTTPException as e:
-                if e.status == 429:
-                    logger.warning(f"Rate limited when creating role - retrying after delay")
-                    await asyncio.sleep(1)
-                    try:
-                        role = await member.guild.create_role(
-                            name=rank_info['rank_name'],
-                            reason="Clan rank role"
-                        )
-                    except Exception:
-                        logger.error("Failed to create role after retry")
-                        return
-                else:
-                    logger.error(f"HTTP error creating role: {e}")
+                if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                    # Exponential backoff: 1s, 2s, 4s, etc.
+                    delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Rate limited when adding role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                    await asyncio.sleep(delay)
+                elif e.status == 429:
+                    logger.error(f"Failed to add role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
                     return
-        
-        # Assign the role
-        try:
-            await member.add_roles(role)
-        except discord.Forbidden:
-            logger.error("Bot doesn't have permission to assign roles")
-        except discord.HTTPException as e:
-            if e.status == 429:
-                logger.warning(f"Rate limited when adding role - retrying after delay")
-                await asyncio.sleep(1)
-                try:
-                    await member.add_roles(role)
-                except Exception:
-                    logger.error("Failed to add role after retry")
+                else:
+                    logger.error(f"HTTP error adding role: {e}")
+                    return
     
     def _create_progress_bar(self, current: int, target: int, base: int = 0) -> str:
         """Create a visual progress bar."""

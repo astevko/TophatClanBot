@@ -1468,62 +1468,76 @@ class AdminCommands(commands.Cog):
         if not old_rank or not new_rank:
             return
         
-        # Remove old rank role
+        # Remove old rank role with retry logic
         old_role = discord.utils.get(member.guild.roles, name=old_rank['rank_name'])
         if old_role:
-            try:
-                await member.remove_roles(old_role)
-            except discord.Forbidden:
-                logger.error("Bot doesn't have permission to remove roles")
-            except discord.HTTPException as e:
-                if e.status == 429:
-                    logger.warning(f"Rate limited when removing role from {member.name} - will retry")
-                    await asyncio.sleep(1)
-                    try:
-                        await member.remove_roles(old_role)
-                    except Exception:
-                        pass
-                else:
-                    logger.error(f"HTTP error removing role: {e}")
+            for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                try:
+                    await member.remove_roles(old_role)
+                    break
+                except discord.Forbidden:
+                    logger.error("Bot doesn't have permission to remove roles")
+                    return
+                except discord.HTTPException as e:
+                    if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                        # Exponential backoff: 1s, 2s, 4s, etc.
+                        delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited when removing role from {member.name} (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                        await asyncio.sleep(delay)
+                    elif e.status == 429:
+                        logger.error(f"Failed to remove role from {member.name} after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                        return
+                    else:
+                        logger.error(f"HTTP error removing role: {e}")
+                        return
         
-        # Add new rank role
+        # Add new rank role (create if doesn't exist) with retry logic
         new_role = discord.utils.get(member.guild.roles, name=new_rank['rank_name'])
         if not new_role:
-            # Create the role if it doesn't exist
+            # Create the role if it doesn't exist with retry logic
+            for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                try:
+                    new_role = await member.guild.create_role(
+                        name=new_rank['rank_name'],
+                        reason="Clan rank role"
+                    )
+                    break
+                except discord.Forbidden:
+                    logger.error("Bot doesn't have permission to create roles")
+                    return
+                except discord.HTTPException as e:
+                    if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                        # Exponential backoff: 1s, 2s, 4s, etc.
+                        delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited when creating role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                        await asyncio.sleep(delay)
+                    elif e.status == 429:
+                        logger.error(f"Failed to create role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                        return
+                    else:
+                        logger.error(f"HTTP error creating role: {e}")
+                        return
+        
+        # Add the role with retry logic
+        for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
             try:
-                new_role = await member.guild.create_role(
-                    name=new_rank['rank_name'],
-                    reason="Clan rank role"
-                )
+                await member.add_roles(new_role)
+                break
             except discord.Forbidden:
-                logger.error("Bot doesn't have permission to create roles")
+                logger.error("Bot doesn't have permission to assign roles")
                 return
             except discord.HTTPException as e:
-                if e.status == 429:
-                    logger.warning(f"Rate limited when creating role - will retry")
-                    await asyncio.sleep(1)
-                    try:
-                        new_role = await member.guild.create_role(name=new_rank['rank_name'], reason="Clan rank role")
-                    except Exception:
-                        return
-                else:
-                    logger.error(f"HTTP error creating role: {e}")
+                if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                    # Exponential backoff: 1s, 2s, 4s, etc.
+                    delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Rate limited when adding role to {member.name} (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                    await asyncio.sleep(delay)
+                elif e.status == 429:
+                    logger.error(f"Failed to add role to {member.name} after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
                     return
-        
-        try:
-            await member.add_roles(new_role)
-        except discord.Forbidden:
-            logger.error("Bot doesn't have permission to assign roles")
-        except discord.HTTPException as e:
-            if e.status == 429:
-                logger.warning(f"Rate limited when adding role to {member.name} - will retry")
-                await asyncio.sleep(1)
-                try:
-                    await member.add_roles(new_role)
-                except Exception:
-                    pass
-            else:
-                logger.error(f"HTTP error adding role: {e}")
+                else:
+                    logger.error(f"HTTP error adding role: {e}")
+                    return
 
 
 async def setup(bot):

@@ -52,6 +52,10 @@ class Config:
     # If no DATABASE_URL, use SQLite (local development)
     USE_SQLITE = DATABASE_URL is None
     
+    # Rate Limiting Configuration
+    MAX_RATE_LIMIT_RETRIES = int(os.getenv("MAX_RATE_LIMIT_RETRIES", "3"))  # Maximum retry attempts for rate limited requests
+    RATE_LIMIT_RETRY_DELAY = float(os.getenv("RATE_LIMIT_RETRY_DELAY", "1.0"))  # Initial delay in seconds before retry
+    
     @classmethod
     def validate(cls):
         """Validate that required configuration is present."""

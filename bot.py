@@ -67,9 +67,10 @@ class DiscordHandler(logging.Handler):
             return
         
         try:
-            # Only send INFO, WARNING, ERROR, and CRITICAL to Discord
-            # DEBUG logs are excluded (too verbose)
-            if level not in ['INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+            # Only send WARNING, ERROR, and CRITICAL to Discord
+            # INFO and DEBUG logs are excluded to reduce rate limiting
+            # All logs still go to bot.log file
+            if level not in ['WARNING', 'ERROR', 'CRITICAL']:
                 return
             
             # All logs go to the configured log channel
@@ -98,8 +99,9 @@ class DiscordHandler(logging.Handler):
             
             await channel.send(embed=embed)
             
-            # Rate limit protection: Add small delay after sending to avoid 429 errors
-            await asyncio.sleep(0.25)
+            # Rate limit protection: Discord allows ~5 messages per 5 seconds
+            # Use 1.1 second delay to stay well under the limit (max ~4.5 messages per 5 seconds)
+            await asyncio.sleep(1.1)
             
         except discord.errors.HTTPException as e:
             # Handle rate limiting gracefully
@@ -299,48 +301,64 @@ class TophatClanBot(commands.Bot):
             if not old_rank or not new_rank:
                 return
             
-            # Remove old rank role
+            # Remove old rank role with retry logic
             old_role = discord.utils.get(member.guild.roles, name=old_rank['rank_name'])
             if old_role and old_role in member.roles:
-                try:
-                    await member.remove_roles(old_role)
-                except discord.HTTPException as e:
-                    if e.status == 429:
-                        logger.debug(f"Rate limited when removing role - retrying after delay")
-                        await asyncio.sleep(1)
+                for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                    try:
                         await member.remove_roles(old_role)
-                    else:
-                        raise
+                        break
+                    except discord.HTTPException as e:
+                        if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                            # Exponential backoff: 1s, 2s, 4s, etc.
+                            delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                            logger.warning(f"Rate limited when removing role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                            await asyncio.sleep(delay)
+                        elif e.status == 429:
+                            logger.error(f"Failed to remove role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                            raise
+                        else:
+                            raise
             
-            # Add new rank role
+            # Add new rank role (create if doesn't exist) with retry logic
             new_role = discord.utils.get(member.guild.roles, name=new_rank['rank_name'])
             if not new_role:
-                # Create the role if it doesn't exist
-                try:
-                    new_role = await member.guild.create_role(
-                        name=new_rank['rank_name'],
-                        reason="Clan rank role"
-                    )
-                except discord.HTTPException as e:
-                    if e.status == 429:
-                        logger.debug(f"Rate limited when creating role - retrying after delay")
-                        await asyncio.sleep(1)
+                # Create the role if it doesn't exist with retry logic
+                for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                    try:
                         new_role = await member.guild.create_role(
                             name=new_rank['rank_name'],
                             reason="Clan rank role"
                         )
+                        break
+                    except discord.HTTPException as e:
+                        if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                            # Exponential backoff: 1s, 2s, 4s, etc.
+                            delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                            logger.warning(f"Rate limited when creating role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                            await asyncio.sleep(delay)
+                        elif e.status == 429:
+                            logger.error(f"Failed to create role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                            raise
+                        else:
+                            raise
+            
+            # Add the role with retry logic
+            for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                try:
+                    await member.add_roles(new_role)
+                    break
+                except discord.HTTPException as e:
+                    if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                        # Exponential backoff: 1s, 2s, 4s, etc.
+                        delay = Config.RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited when adding role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s")
+                        await asyncio.sleep(delay)
+                    elif e.status == 429:
+                        logger.error(f"Failed to add role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting")
+                        raise
                     else:
                         raise
-            
-            try:
-                await member.add_roles(new_role)
-            except discord.HTTPException as e:
-                if e.status == 429:
-                    logger.debug(f"Rate limited when adding role - retrying after delay")
-                    await asyncio.sleep(1)
-                    await member.add_roles(new_role)
-                else:
-                    raise
             
         except discord.Forbidden:
             logger.error(f"Missing permissions to update roles for {member.name}")
