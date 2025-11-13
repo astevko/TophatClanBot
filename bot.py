@@ -13,8 +13,9 @@ from typing import Optional
 
 from config import Config
 import roblox_api
+from security_utils import SanitizingFormatter
 
-# Setup logging first
+# Setup logging first with security sanitization
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -23,6 +24,12 @@ logging.basicConfig(
         logging.FileHandler('bot.log')
     ]
 )
+
+# Apply sanitizing formatter to all handlers
+sanitizing_formatter = SanitizingFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(sanitizing_formatter)
+
 logger = logging.getLogger(__name__)
 
 # Import appropriate database module based on configuration
@@ -60,6 +67,11 @@ class DiscordHandler(logging.Handler):
             return
         
         try:
+            # Only send INFO, WARNING, ERROR, and CRITICAL to Discord
+            # DEBUG logs are excluded (too verbose)
+            if level not in ['INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+                return
+            
             # All logs go to the configured log channel
             channel = self.bot.get_channel(self.channel_id)
             if not channel:
@@ -67,9 +79,8 @@ class DiscordHandler(logging.Handler):
             
             # Color code by log level
             color_map = {
-                'DEBUG': 0x7289DA,    # Blue
                 'INFO': 0x43B581,     # Green
-                'WARNING': 0xFAA61A,  # Yellow
+                'WARNING': 0xFAA61A,  # Yellow/Orange
                 'ERROR': 0xF04747,    # Red
                 'CRITICAL': 0x992D22  # Dark Red
             }
@@ -129,21 +140,22 @@ class TophatClanBot(commands.Bot):
         self.guild_id = Config.GUILD_ID
         
         # Setup Discord logging handler
+        # Only send INFO, WARNING, ERROR, and CRITICAL logs to Discord (no DEBUG)
         self.discord_handler = DiscordHandler(bot=self)
-        self.discord_handler.setLevel(logging.INFO)
-        self.discord_handler.setFormatter(logging.Formatter(
+        self.discord_handler.setLevel(logging.INFO)  # Minimum level: INFO (excludes DEBUG)
+        self.discord_handler.setFormatter(SanitizingFormatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         ))
     
     async def setup_hook(self):
         """Called when the bot is starting up."""
-        logger.info("Setting up bot...")
+        logger.debug("Setting up bot...")
         
         # Initialize database
         await database.init_database()
         
         # Verify Roblox API credentials
-        logger.info("Verifying Roblox API credentials...")
+        logger.debug("Verifying Roblox API credentials...")
         roblox_verified = await roblox_api.verify_roblox_credentials()
         if roblox_verified:
             logger.info("✅ Roblox API credentials verified successfully")
@@ -186,7 +198,7 @@ class TophatClanBot(commands.Bot):
         logging.getLogger().addHandler(self.discord_handler)
         
         logger.info("Bot is ready!")
-        logger.info(f"Discord logging enabled to channel {Config.LOG_CHANNEL_ID}")
+        logger.debug(f"Discord logging enabled to channel {Config.LOG_CHANNEL_ID}")
     
     async def on_command_error(self, ctx, error):
         """Global error handler for commands."""
@@ -205,7 +217,7 @@ class TophatClanBot(commands.Bot):
     async def auto_sync_ranks(self):
         """Background task to automatically sync ranks every hour (Roblox is source of truth)."""
         try:
-            logger.info("🔄 Starting automatic rank synchronization...")
+            logger.debug("🔄 Starting automatic rank synchronization...")
             
             # Get all members from database
             all_members = await self._get_all_members()
@@ -243,7 +255,7 @@ class TophatClanBot(commands.Bot):
                             break
                     
                     synced += 1
-                    logger.info(
+                    logger.debug(
                         f"Auto-synced {member['roblox_username']}: "
                         f"{result['old_rank']['rank_name']} -> {result['new_rank']['rank_name']}"
                     )
@@ -267,7 +279,7 @@ class TophatClanBot(commands.Bot):
     async def before_auto_sync(self):
         """Wait until bot is ready before starting sync task."""
         await self.wait_until_ready()
-        logger.info("Bot ready, automatic sync task will start soon...")
+        logger.debug("Bot ready, automatic sync task will start soon...")
     
     async def _get_all_members(self):
         """Get all members from database."""
@@ -358,7 +370,7 @@ async def main():
     try:
         # Validate configuration
         Config.validate()
-        logger.info("Configuration validated successfully")
+        logger.debug("Configuration validated successfully")
         
         # Create and run bot
         bot = TophatClanBot()

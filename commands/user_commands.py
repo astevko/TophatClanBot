@@ -13,6 +13,14 @@ import re
 
 import database
 from config import Config
+from security_utils import (
+    cooldown_manager,
+    sanitize_embed_text,
+    validate_image_attachment,
+    get_user_error_message,
+    check_admin_permissions,
+    ERROR_CODES
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +69,10 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
         """Handle the modal submission."""
         await interaction.response.defer(ephemeral=True)
         
-        # Parse participants (Roblox usernames)
+        # Parse participants (Roblox usernames) - improved regex for better parsing
         participants_text = self.participants.value
         
-        # Split by comma, newline, or whitespace and clean up
+        # Split by comma, newline, or multiple spaces and clean up
         raw_usernames = re.split(r'[,\n]+', participants_text)
         usernames = [username.strip() for username in raw_usernames if username.strip()]
         
@@ -116,14 +124,19 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
             )
             return
         
-        # Create embed for admin review
+        # Create embed for admin review - with sanitized inputs
+        event_type_sanitized = sanitize_embed_text(self.event_type.value.strip(), max_length=50)
+        participants_sanitized = sanitize_embed_text(participants_text, max_length=1000)
+        start_time_sanitized = sanitize_embed_text(self.start_time.value, max_length=100)
+        end_time_sanitized = sanitize_embed_text(self.end_time.value, max_length=100)
+        
         embed = discord.Embed(
-            title=f"🎯 New {self.event_type.value.strip()} Submission",
+            title=f"🎯 New {event_type_sanitized} Submission",
             color=discord.Color.blue(),
             timestamp=discord.utils.utcnow()
         )
         
-        embed.add_field(name="Event Type", value=self.event_type.value.strip(), inline=True)
+        embed.add_field(name="Event Type", value=event_type_sanitized, inline=True)
         embed.add_field(name="Submitted By", value=self.submitter.mention, inline=True)
         embed.add_field(name="Submission ID", value=f"#{submission_id}", inline=True)
         embed.add_field(name="Status", value="⏳ Pending Review", inline=True)
@@ -134,13 +147,13 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
         participant_display += f"✅ Linked: {len(linked_members)}\n"
         if unlinked_usernames:
             participant_display += f"⚠️ Unlinked: {len(unlinked_usernames)}\n\n"
-            participant_display += f"**All Participants:**\n{participants_text}"
+            participant_display += f"**All Participants:**\n{participants_sanitized}"
         else:
-            participant_display += f"\n**Participants:**\n{participants_text}"
+            participant_display += f"\n**Participants:**\n{participants_sanitized}"
         
         embed.add_field(name="Participants (Roblox)", value=participant_display, inline=False)
-        embed.add_field(name="Start Time", value=self.start_time.value, inline=True)
-        embed.add_field(name="End Time", value=self.end_time.value, inline=True)
+        embed.add_field(name="Start Time", value=start_time_sanitized, inline=True)
+        embed.add_field(name="End Time", value=end_time_sanitized, inline=True)
         
         embed.set_image(url=self.image_url)
         embed.set_footer(text=f"Submission ID: {submission_id}")
@@ -175,18 +188,13 @@ class PromotionApprovalView(discord.ui.View):
     @discord.ui.button(label="Approve Promotion", style=discord.ButtonStyle.green, emoji="✅")
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle promotion approval."""
-        # Check admin permissions
-        from bot import is_admin
-        from config import Config
-        
-        if not interaction.user.guild_permissions.administrator:
-            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
-            if not admin_role and interaction.user.id not in Config.ADMIN_USER_IDS:
-                await interaction.response.send_message(
-                    "❌ You don't have permission to approve promotions.",
-                    ephemeral=True
-                )
-                return
+        # Check admin permissions using centralized check
+        if not check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "❌ You don't have permission to approve promotions.",
+                ephemeral=True
+            )
+            return
         
         await interaction.response.defer()
         
@@ -264,17 +272,13 @@ class PromotionApprovalView(discord.ui.View):
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, emoji="❌")
     async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle promotion denial."""
-        # Check admin permissions
-        from config import Config
-        
-        if not interaction.user.guild_permissions.administrator:
-            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
-            if not admin_role and interaction.user.id not in Config.ADMIN_USER_IDS:
-                await interaction.response.send_message(
-                    "❌ You don't have permission to deny promotions.",
-                    ephemeral=True
-                )
-                return
+        # Check admin permissions using centralized check
+        if not check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "❌ You don't have permission to deny promotions.",
+                ephemeral=True
+            )
+            return
         
         await interaction.response.defer()
         
@@ -319,15 +323,13 @@ class RaidApprovalView(discord.ui.View):
     
     async def approve_callback(self, interaction: discord.Interaction):
         """Handle approve button click."""
-        # Check if user has admin permissions
-        if not interaction.user.guild_permissions.administrator:
-            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
-            if not admin_role:
-                await interaction.response.send_message(
-                    "❌ You don't have permission to approve raids.",
-                    ephemeral=True
-                )
-                return
+        # Check if user has admin permissions using centralized check
+        if not check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "❌ You don't have permission to approve raids.",
+                ephemeral=True
+            )
+            return
         
         # Show modal to get points
         modal = PointsInputModal(self.submission_id, interaction)
@@ -335,15 +337,13 @@ class RaidApprovalView(discord.ui.View):
     
     async def decline_callback(self, interaction: discord.Interaction):
         """Handle decline button click."""
-        # Check if user has admin permissions
-        if not interaction.user.guild_permissions.administrator:
-            admin_role = discord.utils.get(interaction.user.roles, name=Config.ADMIN_ROLE_NAME)
-            if not admin_role:
-                await interaction.response.send_message(
-                    "❌ You don't have permission to decline raids.",
-                    ephemeral=True
-                )
-                return
+        # Check if user has admin permissions using centralized check
+        if not check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "❌ You don't have permission to decline raids.",
+                ephemeral=True
+            )
+            return
         
         await interaction.response.defer()
         
@@ -558,6 +558,7 @@ class UserCommands(commands.Cog):
         self.bot = bot
     
     @app_commands.command(name="xp", description="Check your current rank and points progress")
+    @app_commands.checks.cooldown(1, 10)  # 1 use per 10 seconds per user
     async def xp(self, interaction: discord.Interaction):
         """Check your XP and rank progress."""
         if not interaction.response.is_done():
@@ -567,13 +568,25 @@ class UserCommands(commands.Cog):
                 logger.warning(f"Interaction expired for xp command - user: {interaction.user.name}")
                 return
             except Exception as e:
-                logger.error(f"Error deferring interaction in xp: {e}")
+                logger.error(f"Error deferring interaction in xp: {e}", exc_info=True)
+                await interaction.followup.send(
+                    get_user_error_message(ERROR_CODES['XP_GENERAL']),
+                    ephemeral=True
+                )
                 return
         else:
             logger.warning("Interaction already responded to in xp command")
             return
         
-        member = await database.get_member(interaction.user.id)
+        try:
+            member = await database.get_member(interaction.user.id)
+        except Exception as e:
+            logger.error(f"Database error in xp command: {e}", exc_info=True)
+            await interaction.followup.send(
+                get_user_error_message(ERROR_CODES['DATABASE_ERROR']),
+                ephemeral=True
+            )
+            return
         
         if not member:
             await interaction.followup.send(
@@ -713,6 +726,7 @@ class UserCommands(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
     
     @app_commands.command(name="leaderboard", description="View the top clan members by points")
+    @app_commands.checks.cooldown(1, 30)  # 1 use per 30 seconds per user
     async def leaderboard(self, interaction: discord.Interaction):
         """Display the clan leaderboard."""
         if not interaction.response.is_done():
@@ -722,7 +736,11 @@ class UserCommands(commands.Cog):
                 logger.warning(f"Interaction expired for leaderboard command - user: {interaction.user.name}")
                 return
             except Exception as e:
-                logger.error(f"Error deferring interaction in leaderboard: {e}")
+                logger.error(f"Error deferring interaction in leaderboard: {e}", exc_info=True)
+                await interaction.followup.send(
+                    get_user_error_message(ERROR_CODES['LEADERBOARD_GENERAL']),
+                    ephemeral=True
+                )
                 return
         else:
             logger.warning("Interaction already responded to in leaderboard command")
@@ -763,6 +781,7 @@ class UserCommands(commands.Cog):
     
     @app_commands.command(name="link-roblox", description="Link your Discord account to your Roblox username")
     @app_commands.describe(username="Your Roblox username")
+    @app_commands.checks.cooldown(1, 30)  # 1 use per 30 seconds per user
     async def link_roblox(self, interaction: discord.Interaction, username: str):
         """Link Discord account to Roblox username."""
         if not interaction.response.is_done():
@@ -772,7 +791,11 @@ class UserCommands(commands.Cog):
                 logger.warning(f"Interaction expired for link-roblox command - user: {interaction.user.name}")
                 return
             except Exception as e:
-                logger.error(f"Error deferring interaction in link-roblox: {e}")
+                logger.error(f"Error deferring interaction in link-roblox: {e}", exc_info=True)
+                await interaction.followup.send(
+                    get_user_error_message(ERROR_CODES['LINK_ROBLOX_GENERAL']),
+                    ephemeral=True
+                )
                 return
         else:
             logger.warning("Interaction already responded to in link-roblox command")
@@ -891,6 +914,7 @@ class UserCommands(commands.Cog):
                 )
     
     @app_commands.command(name="submit-raid", description="Submit an event (patrol, raid, defense, etc.) for approval")
+    @app_commands.checks.cooldown(1, 60)  # 1 use per 60 seconds per user (prevent spam)
     async def submit_raid(
         self,
         interaction: discord.Interaction,
@@ -898,7 +922,16 @@ class UserCommands(commands.Cog):
     ):
         """Submit an event with proof image."""
         # Check if user is registered
-        member = await database.get_member(interaction.user.id)
+        try:
+            member = await database.get_member(interaction.user.id)
+        except Exception as e:
+            logger.error(f"Database error in submit-raid: {e}", exc_info=True)
+            await interaction.response.send_message(
+                get_user_error_message(ERROR_CODES['DATABASE_ERROR']),
+                ephemeral=True
+            )
+            return
+        
         if not member:
             await interaction.response.send_message(
                 "❌ You need to link your Roblox account first! Use `/link-roblox`.",
@@ -906,12 +939,10 @@ class UserCommands(commands.Cog):
             )
             return
         
-        # Validate image attachment
-        if not proof_image.content_type or not proof_image.content_type.startswith('image/'):
-            await interaction.response.send_message(
-                "❌ Please attach a valid image file as proof.",
-                ephemeral=True
-            )
+        # Validate image attachment with security checks
+        is_valid, error_message = validate_image_attachment(proof_image, max_size_mb=10)
+        if not is_valid:
+            await interaction.response.send_message(error_message, ephemeral=True)
             return
         
         # Show modal for event details
