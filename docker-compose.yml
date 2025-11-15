@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: tophat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tophatclan
+      POSTGRES_USER: botuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U botuser -d tophatclan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - botnet
+    ports:
+      - "5432:5432"
+
+  # Discord Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tophat-bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database Configuration
+      DATABASE_URL: postgresql://botuser:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/tophatclan
+      
+      # Discord Configuration
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      GUILD_ID: ${GUILD_ID}
+      LOG_CHANNEL_ID: ${LOG_CHANNEL_ID}
+      ADMIN_CHANNEL_ID: ${ADMIN_CHANNEL_ID:-0}
+      
+      # Roblox Configuration
+      ROBLOX_GROUP_ID: ${ROBLOX_GROUP_ID}
+      ROBLOX_API_KEY: ${ROBLOX_API_KEY:-}
+      ROBLOX_COOKIE: ${ROBLOX_COOKIE:-}
+      
+      # Role Configuration
+      ADMIN_ROLE_NAME: ${ADMIN_ROLE_NAME:-Admin}
+      MODERATOR_ROLE_NAME: ${MODERATOR_ROLE_NAME:-Moderator}
+      OFFICER_ROLE_NAME: ${OFFICER_ROLE_NAME:-Officer}
+      ELITE_ROLE_NAME: ${ELITE_ROLE_NAME:-Elite}
+      MEMBER_ROLE_NAME: ${MEMBER_ROLE_NAME:-Member}
+      
+      # Role IDs (optional)
+      ADMIN_ROLE_ID: ${ADMIN_ROLE_ID:-0}
+      MODERATOR_ROLE_ID: ${MODERATOR_ROLE_ID:-0}
+      OFFICER_ROLE_ID: ${OFFICER_ROLE_ID:-0}
+      ELITE_ROLE_ID: ${ELITE_ROLE_ID:-0}
+      MEMBER_ROLE_ID: ${MEMBER_ROLE_ID:-0}
+      
+      # Admin User IDs
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+      
+      # Rate Limiting
+      MAX_RATE_LIMIT_RETRIES: ${MAX_RATE_LIMIT_RETRIES:-3}
+      RATE_LIMIT_RETRY_DELAY: ${RATE_LIMIT_RETRY_DELAY:-1.0}
+    volumes:
+      # Mount logs directory
+      - ./logs:/app/logs
+    networks:
+      - botnet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  botnet:
+    driver: bridge
+

@@ -187,9 +187,39 @@ The bot will:
 - Sync slash commands
 - Be ready to use!
 
-## Deployment to Cloud
+## Deployment Options
 
-### Option 1: Deploy to Railway.app (Free Tier)
+### 🐳 Docker Deployment (Recommended)
+
+The easiest way to deploy is using Docker and Docker Compose with PostgreSQL:
+
+```bash
+# Quick start
+cp setup_example.env .env
+# Edit .env with your credentials + POSTGRES_PASSWORD
+
+# Start services (bot + database)
+make docker-up
+
+# View logs
+make docker-logs
+
+# Stop services
+make docker-down
+```
+
+**Features:**
+- ✅ Production-ready PostgreSQL database
+- ✅ Automatic restarts
+- ✅ Resource isolation
+- ✅ Easy backup/restore
+- ✅ Development mode with hot-reload
+
+📖 **See [README_DOCKER.md](README_DOCKER.md) and [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for complete Docker setup guide**
+
+### ☁️ Cloud Deployment
+
+#### Option 1: Deploy to Railway.app (Free Tier)
 
 1. Create account at [Railway.app](https://railway.app/)
 2. Click "New Project" → "Deploy from GitHub repo"
@@ -217,48 +247,24 @@ The bot will:
 6. Click "Create Web Service"
 7. Your bot will run on the free tier (750 hours/month)
 
-### Option 3: Deploy to fly.io (Free Tier)
+### Option 3: Deploy with Docker to Any VPS
 
-1. Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
-2. Create account: `flyctl auth signup`
-3. Create `Dockerfile` in project root:
+1. Setup VPS with Docker and Docker Compose installed
+2. Clone repository and configure `.env`
+3. Run `docker-compose up -d`
+4. Bot runs 24/7 with PostgreSQL database
 
-```dockerfile
-FROM python:3.11-slim
+See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for detailed instructions.
 
-WORKDIR /app
+### Option 4: GitHub Container Registry + Cloud Run
 
-# Install uv
-RUN pip install uv
+The project includes GitHub Actions that automatically build and push Docker images:
 
-# Copy project files
-COPY . .
+1. Push to main branch → Image builds automatically
+2. Pull from `ghcr.io/your-username/tophatclanbot:latest`
+3. Deploy to Google Cloud Run, AWS ECS, Azure Container Instances, etc.
 
-# Install dependencies using uv
-RUN uv pip install --system -e .
-
-# Run the bot
-CMD ["python", "bot.py"]
-```
-
-4. Create `fly.toml` in project root:
-
-```toml
-app = "tophatc-clan-bot"
-
-[build]
-  dockerfile = "Dockerfile"
-```
-
-5. Deploy:
-```bash
-flyctl launch
-flyctl secrets set DISCORD_BOT_TOKEN=your_token
-flyctl secrets set GUILD_ID=your_guild_id
-flyctl secrets set ROBLOX_GROUP_ID=your_group_id
-flyctl secrets set ROBLOX_API_KEY=your_api_key
-flyctl deploy
-```
+See `.github/workflows/docker-build.yml` for CI/CD configuration.
 
 ## Usage Workflow
 
@@ -330,28 +336,63 @@ The database file is created automatically on first run.
 - Give bot "Manage Roles" permission
 - Check that bot can access admin channel
 
+## CI/CD Pipeline
+
+The project includes GitHub Actions workflows for automated testing and deployment:
+
+### Continuous Integration (`.github/workflows/ci.yml`)
+- Runs on every push and PR
+- Tests across Python 3.9, 3.10, 3.11, 3.12
+- Linting with ruff
+- Security scanning with Bandit and Safety
+
+### Docker Build (`.github/workflows/docker-build.yml`)
+- Builds multi-architecture Docker images (amd64, arm64)
+- Pushes to GitHub Container Registry
+- Security scanning with Docker Scout
+- Automatic on push to main or version tags
+
+### Deployment (`.github/workflows/deploy.yml`)
+- Template for automated deployment
+- Supports Railway, VPS, AWS ECS, and more
+- Manual trigger or automatic on version tags
+
 ## Development
 
 ### Project Structure
 
 ```
 TophatClanBot/
-├── bot.py                 # Main bot entry point
-├── database.py            # SQLite database operations
-├── roblox_api.py          # Roblox API integration
-├── config.py              # Configuration management
+├── bot.py                      # Main bot entry point
+├── database.py                 # SQLite database operations
+├── database_postgres.py        # PostgreSQL database operations
+├── roblox_api.py               # Roblox API integration
+├── config.py                   # Configuration management
+├── security_utils.py           # Security utilities and logging
 ├── commands/
-│   ├── user_commands.py   # User-facing commands
-│   └── admin_commands.py  # Admin-only commands
-├── pyproject.toml         # Project metadata and dependencies (uv)
-├── requirements.txt       # Python dependencies (fallback)
-├── Dockerfile             # Docker container configuration
-├── Makefile               # Build automation (Linux/macOS)
-├── run.sh / run.bat       # Quick start scripts
-├── setup_example.env      # Environment template
-├── .env                   # Environment variables (not in git)
-├── .gitignore            # Git ignore rules
-└── README.md             # This file
+│   ├── user_commands.py        # User-facing commands
+│   └── admin_commands.py       # Admin-only commands
+├── pyproject.toml              # Project metadata and dependencies
+├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Production Docker image
+├── docker-compose.yml          # Production orchestration
+├── docker-compose.dev.yml      # Development orchestration
+├── .dockerignore               # Docker build optimization
+├── Makefile                    # Build automation
+├── run.sh / run.bat            # Quick start scripts
+├── setup_example.env           # Environment template
+├── .env                        # Environment variables (not in git)
+├── .gitignore                  # Git ignore rules
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml              # Continuous Integration
+│   │   ├── docker-build.yml    # Docker image builds
+│   │   └── deploy.yml          # Deployment automation
+│   └── PULL_REQUEST_TEMPLATE.md
+├── README.md                   # This file
+├── README_DOCKER.md            # Docker quick reference
+├── DOCKER_DEPLOYMENT.md        # Comprehensive Docker guide
+└── [Other documentation files]
 ```
 
 ### Using uv for Development
@@ -384,17 +425,24 @@ make help
 # First-time setup
 make setup
 
-# Install dependencies
-make install
+# Local development
+make install           # Install dependencies
+make run               # Run the bot
 
-# Run the bot
-make run
+# Docker development
+make docker-dev        # Start with hot-reload + pgAdmin
+make docker-up         # Start production stack
+make docker-down       # Stop all services
+make docker-logs       # View logs
 
-# Build Docker image
-make docker-build
+# Database management
+make db-backup         # Backup PostgreSQL database
+make db-restore        # Restore from backup
+make db-shell          # Open database shell
 
-# Clean up database and logs
-make clean
+# Cleanup
+make clean             # Clean local files
+make docker-clean      # Clean Docker resources
 ```
 
 ### Adding New Ranks

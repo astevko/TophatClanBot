@@ -1,0 +1,57 @@
+version: '3.8'
+
+# Development Docker Compose configuration
+# Run with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  postgres:
+    ports:
+      # Expose PostgreSQL port for local development tools
+      - "5432:5432"
+    environment:
+      # Enable more verbose logging
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.utf8"
+
+  bot:
+    # Mount source code for live development (no rebuild needed)
+    volumes:
+      - ./bot.py:/app/bot.py
+      - ./config.py:/app/config.py
+      - ./database.py:/app/database.py
+      - ./database_postgres.py:/app/database_postgres.py
+      - ./roblox_api.py:/app/roblox_api.py
+      - ./security_utils.py:/app/security_utils.py
+      - ./commands:/app/commands
+      - ./logs:/app/logs
+    environment:
+      # Enable Python development mode
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    # Override command for development with auto-reload
+    command: python -u bot.py
+    # Don't restart automatically in dev mode (easier debugging)
+    restart: "no"
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tophat-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@tophatclan.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    networks:
+      - botnet
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  pgadmin_data:
+    driver: local
+
