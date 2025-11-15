@@ -4,7 +4,7 @@ Commands restricted to administrators for managing the clan.
 """
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import discord
 from discord import app_commands
@@ -239,7 +239,7 @@ class AdminCommands(commands.Cog):
                 logger.error(f"Error deferring interaction in promote: {e}")
                 return
         else:
-            logger.warning(f"Interaction already responded to in promote command")
+            logger.warning("Interaction already responded to in promote command")
             return
 
         # Check if user is trying to promote themselves
@@ -388,7 +388,7 @@ class AdminCommands(commands.Cog):
         discord_status = (
             "✅ Discord role updated" if discord_role_success else "⚠️ Discord role update failed"
         )
-        roblox_status = "✅ Roblox rank updated" if roblox_success else f"❌ Roblox sync failed"
+        roblox_status = "✅ Roblox rank updated" if roblox_success else "❌ Roblox sync failed"
         dm_status = "✅ DM sent" if dm_sent else "⚠️ DM failed (user has DMs disabled)"
 
         embed.add_field(name="Database", value=db_status, inline=True)
@@ -443,7 +443,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/add-points` command timed out. Please try again."
+                        "⚠️ Your `/add-points` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -597,7 +597,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/points-remove` command timed out. Please try again."
+                        "⚠️ Your `/points-remove` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -696,7 +696,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/set-admin-channel` command timed out. Please try again."
+                        "⚠️ Your `/set-admin-channel` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -731,7 +731,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/view-pending` command timed out. Please try again."
+                        "⚠️ Your `/view-pending` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -793,7 +793,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/check-member` command timed out. Please try again."
+                        "⚠️ Your `/check-member` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -834,9 +834,6 @@ class AdminCommands(commands.Cog):
             logger.info(
                 f"Sync skipped for {member_data['roblox_username']} on check-member: {sync_result['reason']}"
             )
-
-        # Get next rank info
-        next_rank = await database.get_next_rank(member_data["current_rank"])
 
         embed = discord.Embed(
             title=f"📊 Member Stats: {member.display_name}", color=discord.Color.blue()
@@ -923,7 +920,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/list-roblox-ranks` command timed out. Please try again."
+                        "⚠️ Your `/list-roblox-ranks` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -1017,7 +1014,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/compare-ranks` command timed out. Please try again."
+                        "⚠️ Your `/compare-ranks` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -1182,7 +1179,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/list-ranks` command timed out. Please try again."
+                        "⚠️ Your `/list-ranks` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -1275,7 +1272,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/verify-rank` command timed out. Please try again."
+                        "⚠️ Your `/verify-rank` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -1372,7 +1369,7 @@ class AdminCommands(commands.Cog):
                 )
                 try:
                     await interaction.user.send(
-                        f"⚠️ Your `/sync` command timed out. Please try again."
+                        "⚠️ Your `/sync` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
@@ -1493,7 +1490,7 @@ class AdminCommands(commands.Cog):
 
             embed = discord.Embed(
                 title="✅ Bulk Sync Complete",
-                description=f"Synchronized ranks for all registered members",
+                description="Synchronized ranks for all registered members",
                 color=discord.Color.green(),
             )
 

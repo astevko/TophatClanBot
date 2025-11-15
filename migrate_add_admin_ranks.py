@@ -3,8 +3,8 @@ Migration script to add admin_only column and new ranks to existing database.
 Run this if you're upgrading from the old rank system.
 """
 
-import sqlite3
 import asyncio
+import sqlite3
 import sys
 
 DATABASE_PATH = "tophat_clan.db"
@@ -25,7 +25,7 @@ def migrate_sqlite():
         if "admin_only" not in columns:
             print("✅ Adding admin_only column...")
             cursor.execute("""
-                ALTER TABLE rank_requirements 
+                ALTER TABLE rank_requirements
                 ADD COLUMN admin_only BOOLEAN DEFAULT 0
             """)
             conn.commit()
@@ -58,7 +58,7 @@ def migrate_sqlite():
             try:
                 cursor.execute(
                     """
-                    INSERT INTO rank_requirements 
+                    INSERT INTO rank_requirements
                     (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
                     VALUES (?, ?, ?, ?, ?)
                 """,
@@ -75,8 +75,8 @@ def migrate_sqlite():
         # Show current ranks
         print("\n📋 Current rank structure:")
         cursor.execute("""
-            SELECT rank_order, rank_name, points_required, admin_only 
-            FROM rank_requirements 
+            SELECT rank_order, rank_name, points_required, admin_only
+            FROM rank_requirements
             ORDER BY rank_order
         """)
 
@@ -111,6 +111,7 @@ async def migrate_postgres():
     """Migrate PostgreSQL database to include admin_only column and new ranks."""
     try:
         import asyncpg
+
         from config import Config
 
         print("🔄 Starting PostgreSQL migration...")
@@ -120,7 +121,7 @@ async def migrate_postgres():
         # Add admin_only column if it doesn't exist
         try:
             await conn.execute("""
-                ALTER TABLE rank_requirements 
+                ALTER TABLE rank_requirements
                 ADD COLUMN admin_only BOOLEAN DEFAULT FALSE
             """)
             print("✅ Added admin_only column")
@@ -152,7 +153,7 @@ async def migrate_postgres():
             try:
                 await conn.execute(
                     """
-                    INSERT INTO rank_requirements 
+                    INSERT INTO rank_requirements
                     (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
                     VALUES ($1, $2, $3, $4, $5)
                 """,

@@ -3,10 +3,10 @@ Security utilities for TophatC Clan Bot
 Includes logging sanitization, input validation, and error handling.
 """
 
-import re
 import logging
-from typing import Optional
+import re
 from datetime import datetime, timedelta
+from typing import Optional
 
 
 class SanitizingFormatter(logging.Formatter):
@@ -214,8 +214,9 @@ def check_admin_permissions(interaction) -> bool:
     Returns:
         True if user has admin permissions, False otherwise
     """
-    from config import Config
     import discord
+
+    from config import Config
 
     # Method 1: Discord administrator permission
     if interaction.user.guild_permissions.administrator:

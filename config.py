@@ -4,6 +4,7 @@ Loads environment variables and provides configuration access.
 """
 
 import os
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file

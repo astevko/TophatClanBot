@@ -3,9 +3,10 @@ Roblox API integration for TophatC Clan Bot
 Handles Roblox group rank verification and updates.
 """
 
-import aiohttp
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import aiohttp
 
 from config import Config
 

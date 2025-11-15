@@ -3,10 +3,11 @@ Database module for TophatC Clan Bot
 Handles all SQLite database operations for members, raid submissions, and rank requirements.
 """
 
-import aiosqlite
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ async def insert_default_ranks(db):
     for rank_order, rank_name, points_required, roblox_rank_id, admin_only in default_ranks:
         await db.execute(
             """
-            INSERT OR IGNORE INTO rank_requirements 
+            INSERT OR IGNORE INTO rank_requirements
             (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
             VALUES (?, ?, ?, ?, ?)
         """,
@@ -312,7 +313,7 @@ async def get_next_rank(
         if include_admin_only:
             # Include all ranks
             query = """
-                SELECT * FROM rank_requirements 
+                SELECT * FROM rank_requirements
                 WHERE rank_order > ?
                 ORDER BY rank_order ASC
                 LIMIT 1
@@ -320,7 +321,7 @@ async def get_next_rank(
         else:
             # Only point-based ranks
             query = """
-                SELECT * FROM rank_requirements 
+                SELECT * FROM rank_requirements
                 WHERE rank_order > ? AND admin_only = 0
                 ORDER BY rank_order ASC
                 LIMIT 1
@@ -348,7 +349,7 @@ async def create_raid_submission(
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute(
             """
-            INSERT INTO raid_submissions 
+            INSERT INTO raid_submissions
             (submitter_id, event_type, participants, start_time, end_time, image_url, status, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         """,
@@ -389,7 +390,7 @@ async def approve_raid_submission(submission_id: int, admin_id: int, points: int
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
             """
-            UPDATE raid_submissions 
+            UPDATE raid_submissions
             SET status = 'approved', admin_id = ?, points_awarded = ?
             WHERE submission_id = ?
         """,
@@ -405,7 +406,7 @@ async def decline_raid_submission(submission_id: int, admin_id: int) -> bool:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
             """
-            UPDATE raid_submissions 
+            UPDATE raid_submissions
             SET status = 'declined', admin_id = ?
             WHERE submission_id = ?
         """,
@@ -421,7 +422,7 @@ async def get_pending_submissions() -> List[Dict[str, Any]]:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("""
-            SELECT * FROM raid_submissions 
+            SELECT * FROM raid_submissions
             WHERE status = 'pending'
             ORDER BY timestamp DESC
         """) as cursor:

@@ -3,10 +3,12 @@ PostgreSQL database adapter for TophatC Clan Bot
 Used when deployed to cloud platforms (Railway, Render, etc.)
 """
 
-import asyncpg
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import asyncpg
+
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -108,7 +110,7 @@ async def insert_default_ranks(conn):
     for rank_order, rank_name, points_required, roblox_rank_id, admin_only in default_ranks:
         await conn.execute(
             """
-            INSERT INTO rank_requirements 
+            INSERT INTO rank_requirements
             (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (rank_order) DO NOTHING
@@ -267,7 +269,7 @@ async def get_next_rank(
         if include_admin_only:
             # Include all ranks
             query = """
-                SELECT * FROM rank_requirements 
+                SELECT * FROM rank_requirements
                 WHERE rank_order > $1
                 ORDER BY rank_order ASC
                 LIMIT 1
@@ -275,7 +277,7 @@ async def get_next_rank(
         else:
             # Only point-based ranks
             query = """
-                SELECT * FROM rank_requirements 
+                SELECT * FROM rank_requirements
                 WHERE rank_order > $1 AND admin_only = FALSE
                 ORDER BY rank_order ASC
                 LIMIT 1
@@ -298,7 +300,7 @@ async def create_raid_submission(
     async with pool.acquire() as conn:
         submission_id = await conn.fetchval(
             """
-            INSERT INTO raid_submissions 
+            INSERT INTO raid_submissions
             (submitter_id, participants, start_time, end_time, image_url, status, timestamp)
             VALUES ($1, $2, $3, $4, $5, 'pending', $6)
             RETURNING submission_id
@@ -335,7 +337,7 @@ async def approve_raid_submission(submission_id: int, admin_id: int, points: int
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE raid_submissions 
+            UPDATE raid_submissions
             SET status = 'approved', admin_id = $1, points_awarded = $2
             WHERE submission_id = $3
         """,
@@ -353,7 +355,7 @@ async def decline_raid_submission(submission_id: int, admin_id: int) -> bool:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE raid_submissions 
+            UPDATE raid_submissions
             SET status = 'declined', admin_id = $1
             WHERE submission_id = $2
         """,
@@ -369,7 +371,7 @@ async def get_pending_submissions() -> List[Dict[str, Any]]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT * FROM raid_submissions 
+            SELECT * FROM raid_submissions
             WHERE status = 'pending'
             ORDER BY timestamp DESC
         """)

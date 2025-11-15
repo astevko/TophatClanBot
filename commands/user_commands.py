@@ -3,23 +3,22 @@ User commands for TophatC Clan Bot
 Commands available to all clan members.
 """
 
+import asyncio
+import logging
+import re
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-import logging
-import asyncio
-from typing import Optional
-import re
 
 import database
 from config import Config
 from security_utils import (
-    cooldown_manager,
+    ERROR_CODES,
+    check_admin_permissions,
+    get_user_error_message,
     sanitize_embed_text,
     validate_image_attachment,
-    get_user_error_message,
-    check_admin_permissions,
-    ERROR_CODES,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,7 +169,7 @@ class RaidSubmissionModal(discord.ui.Modal, title="Submit Event"):
         if unlinked_usernames:
             confirmation += f"⚠️ {len(unlinked_usernames)} won't receive points (not linked):\n"
             confirmation += f"**{', '.join(unlinked_usernames)}**\n"
-            confirmation += f"\nThese users can use `/link-roblox` to link their accounts and receive points in future events."
+            confirmation += "\nThese users can use `/link-roblox` to link their accounts and receive points in future events."
 
         await interaction.followup.send(confirmation, ephemeral=True)
 
@@ -876,7 +875,7 @@ class UserCommands(commands.Cog):
                     )
             else:
                 await interaction.followup.send(
-                    f"❌ That Roblox username is already linked to another Discord account.",
+                    "❌ That Roblox username is already linked to another Discord account.",
                     ephemeral=True,
                 )
         else:
@@ -901,7 +900,7 @@ class UserCommands(commands.Cog):
                 logger.info(f"New member {username} linked with rank {rank_name} from Roblox")
             else:
                 await interaction.followup.send(
-                    f"❌ Failed to link account. That Roblox username might already be taken.",
+                    "❌ Failed to link account. That Roblox username might already be taken.",
                     ephemeral=True,
                 )
 
