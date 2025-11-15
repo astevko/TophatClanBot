@@ -28,10 +28,13 @@ Complete guide to all documentation for the TophatC Clan Discord Bot.
 
 ### 💾 Database Management
 - **[BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md)** - Complete backup and restore procedures
+- **[ORACLE_DEPLOYMENT_GUIDE.md](ORACLE_DEPLOYMENT_GUIDE.md)** ⭐ NEW - Oracle Autonomous Database setup
 - **Scripts:**
   - `backup_sqlite.sh` - Automated SQLite backup
   - `backup_postgres.sh` - Automated PostgreSQL backup
   - `migrate_to_postgres.py` - SQLite to PostgreSQL migration tool
+  - `migrate_postgres_to_oracle.py` - PostgreSQL to Oracle migration tool
+  - `test_oracle_connection.py` - Test Oracle database connectivity
 
 ### 🔧 Configuration & Customization
 - **[RANK_CUSTOMIZATION.md](RANK_CUSTOMIZATION.md)** - Customize ranks and point requirements
@@ -86,6 +89,11 @@ Complete guide to all documentation for the TophatC Clan Discord Bot.
 1. [BACKUP_RESTORE_GUIDE.md#4-migrate-to-postgresql-on-oci](BACKUP_RESTORE_GUIDE.md#4-migrate-to-postgresql-on-oci)
 2. Run `python migrate_to_postgres.py <database_url>`
 
+### I want to migrate to Oracle Autonomous Database
+1. [ORACLE_DEPLOYMENT_GUIDE.md](ORACLE_DEPLOYMENT_GUIDE.md) - Oracle setup guide
+2. Run `python test_oracle_connection.py` - Test connection
+3. Run `python migrate_postgres_to_oracle.py` - Migrate data
+
 ### I want to customize ranks
 1. [RANK_CUSTOMIZATION.md](RANK_CUSTOMIZATION.md)
 2. [RANK_IDENTIFICATION_GUIDE.md](RANK_IDENTIFICATION_GUIDE.md)
@@ -116,7 +124,11 @@ Located in project root:
 
 ### Migration Scripts
 - **`migrate_to_postgres.py`** - Migrate data from SQLite to PostgreSQL
+- **`migrate_postgres_to_oracle.py`** - Migrate data from PostgreSQL to Oracle
 - **`migrate_add_admin_ranks.py`** - Add admin-only ranks to existing database
+
+### Test Scripts
+- **`test_oracle_connection.py`** - Test Oracle database connection and verify setup
 
 ### Run Scripts
 - **`run.sh`** - Quick start for Linux/macOS
@@ -136,6 +148,7 @@ TophatClanBot/
 ├── Documentation (Guides)
 │   ├── OCI_DEPLOYMENT_GUIDE.md          # OCI deployment
 │   ├── QUICK_START_OCI.md               # Fast OCI setup
+│   ├── ORACLE_DEPLOYMENT_GUIDE.md       # Oracle database setup ⭐ NEW
 │   ├── BACKUP_RESTORE_GUIDE.md          # Backup & migration
 │   ├── README_DOCKER.md                 # Docker quick ref
 │   ├── DOCKER_DEPLOYMENT.md             # Docker full guide
@@ -147,6 +160,7 @@ TophatClanBot/
 │   ├── bot.py                           # Main bot entry
 │   ├── database.py                      # SQLite operations
 │   ├── database_postgres.py             # PostgreSQL operations
+│   ├── database_oracle.py               # Oracle operations ⭐ NEW
 │   ├── roblox_api.py                    # Roblox integration
 │   ├── config.py                        # Configuration
 │   ├── security_utils.py                # Security utilities
@@ -164,7 +178,9 @@ TophatClanBot/
 ├── Scripts
 │   ├── backup_sqlite.sh                 # SQLite backup
 │   ├── backup_postgres.sh               # PostgreSQL backup
-│   ├── migrate_to_postgres.py           # DB migration
+│   ├── migrate_to_postgres.py           # SQLite to PostgreSQL migration
+│   ├── migrate_postgres_to_oracle.py    # PostgreSQL to Oracle migration ⭐ NEW
+│   ├── test_oracle_connection.py        # Oracle connection test ⭐ NEW
 │   ├── run.sh / run.bat                 # Quick start
 │   └── migrate_add_admin_ranks.py       # Schema migration
 │
@@ -187,9 +203,10 @@ TophatClanBot/
 | **Installation** | [README.md](README.md), [SETUP_GUIDE.md](SETUP_GUIDE.md) |
 | **Commands** | [COMMANDS_GUIDE.md](COMMANDS_GUIDE.md) |
 | **OCI Deployment** | [OCI_DEPLOYMENT_GUIDE.md](OCI_DEPLOYMENT_GUIDE.md), [QUICK_START_OCI.md](QUICK_START_OCI.md) |
+| **Oracle Database** | [ORACLE_DEPLOYMENT_GUIDE.md](ORACLE_DEPLOYMENT_GUIDE.md) ⭐ NEW |
 | **Network/Firewall** | [OCI_NETWORK_REQUIREMENTS.md](OCI_NETWORK_REQUIREMENTS.md) |
 | **Docker** | [README_DOCKER.md](README_DOCKER.md), [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) |
-| **Database** | [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) |
+| **Database** | [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md), [ORACLE_DEPLOYMENT_GUIDE.md](ORACLE_DEPLOYMENT_GUIDE.md) |
 | **Ranks** | [RANK_CUSTOMIZATION.md](RANK_CUSTOMIZATION.md), [ADMIN_RANKS_GUIDE.md](ADMIN_RANKS_GUIDE.md) |
 | **Roblox** | [ROBLOX_API_FIX.md](ROBLOX_API_FIX.md), [ROBLOX_SYNC_GUIDE.md](ROBLOX_SYNC_GUIDE.md) |
 | **Troubleshooting** | [RATE_LIMIT_FIXES.md](RATE_LIMIT_FIXES.md), [SYNC_FIX_GUIDE.md](SYNC_FIX_GUIDE.md) |

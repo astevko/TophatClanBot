@@ -34,7 +34,11 @@ logging.getLogger("discord.http").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Import appropriate database module based on configuration
-if Config.USE_SQLITE:
+if Config.USE_ORACLE:
+    import database_oracle as database
+
+    logger.info("Using Oracle database (production)")
+elif Config.USE_SQLITE:
     import database
 
     logger.info("Using SQLite database (local development)")

@@ -50,8 +50,19 @@ class Config:
     # Database Configuration
     # Railway/Render automatically sets DATABASE_URL for PostgreSQL
     DATABASE_URL = os.getenv("DATABASE_URL")
-    # If no DATABASE_URL, use SQLite (local development)
-    USE_SQLITE = DATABASE_URL is None
+
+    # Oracle Database Configuration
+    ORACLE_USER = os.getenv("ORACLE_USER")
+    ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD")
+    ORACLE_DSN = os.getenv("ORACLE_DSN")
+    ORACLE_CONFIG_DIR = os.getenv("ORACLE_CONFIG_DIR")  # Optional: for wallet
+    ORACLE_WALLET_LOCATION = os.getenv("ORACLE_WALLET_LOCATION")  # Optional: for Python 3.13+
+    ORACLE_WALLET_PASSWORD = os.getenv("ORACLE_WALLET_PASSWORD")  # Optional: for Python 3.13+
+
+    # Database selection logic
+    # Priority: Oracle > PostgreSQL > SQLite
+    USE_ORACLE = ORACLE_USER is not None and ORACLE_PASSWORD is not None and ORACLE_DSN is not None
+    USE_SQLITE = DATABASE_URL is None and not USE_ORACLE
 
     # Rate Limiting Configuration
     MAX_RATE_LIMIT_RETRIES = int(

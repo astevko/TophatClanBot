@@ -322,20 +322,38 @@ See `.github/workflows/docker-build.yml` for CI/CD configuration.
 
 ## Database
 
-The bot supports both SQLite (local development) and PostgreSQL (production):
+The bot supports three database backends for different deployment scenarios:
 
 ### SQLite (Local Development)
 - **Database file**: `tophat_clan.db`
-- **Used when**: `DATABASE_URL` environment variable is not set
+- **Used when**: Neither `DATABASE_URL` nor Oracle credentials are set
 - **Best for**: Local development and testing
 
 ### PostgreSQL (Production)
 - **Used when**: `DATABASE_URL` environment variable is set
-- **Best for**: Production deployments (OCI, Railway, Render, etc.)
+- **Best for**: Production deployments (Railway, Render, Docker)
 - **Connection format**: `postgresql://user:password@host:port/database`
 
+### Oracle Autonomous Database (Cloud Production) ⭐ NEW
+- **Used when**: `ORACLE_USER`, `ORACLE_PASSWORD`, and `ORACLE_DSN` are set
+- **Best for**: Enterprise deployments on Oracle Cloud Infrastructure
+- **Features**:
+  - Fully managed cloud database
+  - Automatic backups and scaling
+  - Always-free tier available (20 GB storage)
+  - High availability and security
+
+📖 **See [ORACLE_DEPLOYMENT_GUIDE.md](ORACLE_DEPLOYMENT_GUIDE.md) for complete Oracle setup instructions**
+
+### Database Priority
+
+The bot selects the database in this priority order:
+1. **Oracle** (if Oracle credentials are configured)
+2. **PostgreSQL** (if `DATABASE_URL` is configured)
+3. **SQLite** (default fallback for local development)
+
 ### Database Schema
-Both databases use the same schema with four main tables:
+All databases use the same schema with four main tables:
 - **members**: Discord ID, Roblox username, rank, points
 - **raid_submissions**: Submitted events with approval status
 - **rank_requirements**: Rank hierarchy and point thresholds
@@ -344,7 +362,7 @@ Both databases use the same schema with four main tables:
 The database is created automatically on first run.
 
 ### Backup & Migration
-The project includes automated backup tools:
+The project includes automated backup and migration tools:
 
 ```bash
 # Backup SQLite (local)
@@ -355,6 +373,12 @@ The project includes automated backup tools:
 
 # Migrate SQLite to PostgreSQL
 python migrate_to_postgres.py postgresql://user:pass@host:5432/db
+
+# Migrate PostgreSQL to Oracle
+python migrate_postgres_to_oracle.py
+
+# Test Oracle connection
+python test_oracle_connection.py
 ```
 
 📖 **See [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) for complete backup/restore instructions**
@@ -416,6 +440,7 @@ TophatClanBot/
 ├── bot.py                      # Main bot entry point
 ├── database.py                 # SQLite database operations
 ├── database_postgres.py        # PostgreSQL database operations
+├── database_oracle.py          # Oracle database operations
 ├── roblox_api.py               # Roblox API integration
 ├── config.py                   # Configuration management
 ├── security_utils.py           # Security utilities and logging
@@ -442,6 +467,10 @@ TophatClanBot/
 ├── README.md                   # This file
 ├── README_DOCKER.md            # Docker quick reference
 ├── DOCKER_DEPLOYMENT.md        # Comprehensive Docker guide
+├── ORACLE_DEPLOYMENT_GUIDE.md  # Oracle database setup guide
+├── OCI_DEPLOYMENT_GUIDE.md     # Oracle Cloud deployment
+├── migrate_postgres_to_oracle.py  # PostgreSQL to Oracle migration
+├── test_oracle_connection.py   # Test Oracle connectivity
 └── [Other documentation files]
 ```
 
