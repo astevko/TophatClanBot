@@ -3,16 +3,17 @@ TophatC Clan Discord Bot
 Main bot entry point with Discord client setup and command registration.
 """
 
+import asyncio
+import logging
+import sys
+from typing import Optional
+
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-import logging
-import sys
-import asyncio
-from typing import Optional
 
-from config import Config
 import roblox_api
+from config import Config
 from security_utils import SanitizingFormatter
 
 # Setup logging first with security sanitization
@@ -121,7 +122,7 @@ class DiscordHandler(logging.Handler):
         except discord.errors.HTTPException as e:
             # Handle rate limiting gracefully
             if e.status == 429:
-                print(f"Discord rate limited - skipping log message", file=sys.stderr)
+                print("Discord rate limited - skipping log message", file=sys.stderr)
             else:
                 print(f"Failed to send log to Discord: {e}", file=sys.stderr)
         except Exception as e:
