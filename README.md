@@ -219,7 +219,28 @@ make docker-down
 
 ### ☁️ Cloud Deployment
 
-#### Option 1: Deploy to Railway.app (Free Tier)
+#### Option 1: Deploy to Oracle Cloud (OCI) Free Tier (Recommended) ⭐
+
+Oracle Cloud's Always Free tier provides generous resources perfect for Discord bots:
+- ✅ **4 ARM CPUs + 24 GB RAM** (always free!)
+- ✅ **PostgreSQL Database** (20 GB, always free!)
+- ✅ **200 GB Storage** (always free!)
+- ✅ **No credit card charges** after trial
+
+**Quick Start:**
+```bash
+# 30-minute setup - see detailed guide
+# 1. Create OCI account
+# 2. Launch VM (4 ARM CPUs, 24 GB RAM)
+# 3. Install Docker & PostgreSQL
+# 4. Deploy bot with Docker Compose
+```
+
+📖 **See [OCI_DEPLOYMENT_GUIDE.md](OCI_DEPLOYMENT_GUIDE.md) for complete step-by-step instructions**  
+📖 **See [QUICK_START_OCI.md](QUICK_START_OCI.md) for fast-track deployment (30 min)**  
+📖 **See [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) for database migration**
+
+#### Option 2: Deploy to Railway.app (Free Tier)
 
 1. Create account at [Railway.app](https://railway.app/)
 2. Click "New Project" → "Deploy from GitHub repo"
@@ -233,7 +254,7 @@ make docker-down
 6. Railway will automatically deploy your bot
 7. Your bot will run 24/7 with $5 free credit per month
 
-### Option 2: Deploy to Render.com (Free Tier)
+#### Option 3: Deploy to Render.com (Free Tier)
 
 1. Create account at [Render.com](https://render.com/)
 2. Click "New" → "Web Service"
@@ -247,7 +268,7 @@ make docker-down
 6. Click "Create Web Service"
 7. Your bot will run on the free tier (750 hours/month)
 
-### Option 3: Deploy with Docker to Any VPS
+#### Option 4: Deploy with Docker to Any VPS
 
 1. Setup VPS with Docker and Docker Compose installed
 2. Clone repository and configure `.env`
@@ -256,7 +277,7 @@ make docker-down
 
 See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for detailed instructions.
 
-### Option 4: GitHub Container Registry + Cloud Run
+#### Option 5: GitHub Container Registry + Cloud Run
 
 The project includes GitHub Actions that automatically build and push Docker images:
 
@@ -301,13 +322,42 @@ See `.github/workflows/docker-build.yml` for CI/CD configuration.
 
 ## Database
 
-The bot uses SQLite (`tophat_clan.db`) with three main tables:
+The bot supports both SQLite (local development) and PostgreSQL (production):
 
+### SQLite (Local Development)
+- **Database file**: `tophat_clan.db`
+- **Used when**: `DATABASE_URL` environment variable is not set
+- **Best for**: Local development and testing
+
+### PostgreSQL (Production)
+- **Used when**: `DATABASE_URL` environment variable is set
+- **Best for**: Production deployments (OCI, Railway, Render, etc.)
+- **Connection format**: `postgresql://user:password@host:port/database`
+
+### Database Schema
+Both databases use the same schema with four main tables:
 - **members**: Discord ID, Roblox username, rank, points
 - **raid_submissions**: Submitted events with approval status
 - **rank_requirements**: Rank hierarchy and point thresholds
+- **config**: Bot configuration settings
 
-The database file is created automatically on first run.
+The database is created automatically on first run.
+
+### Backup & Migration
+The project includes automated backup tools:
+
+```bash
+# Backup SQLite (local)
+./backup_sqlite.sh
+
+# Backup PostgreSQL (production)
+./backup_postgres.sh
+
+# Migrate SQLite to PostgreSQL
+python migrate_to_postgres.py postgresql://user:pass@host:5432/db
+```
+
+📖 **See [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) for complete backup/restore instructions**
 
 ## Troubleshooting
 

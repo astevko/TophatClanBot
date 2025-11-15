@@ -77,9 +77,12 @@ dmypy.json
 
 # Backup files
 backups/
+db_backups/
+oci_backups/
 *.bak
 *.backup
 *.sql
+*.sql.gz
 
 # Docker
 docker-compose.override.yml
