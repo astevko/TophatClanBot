@@ -242,8 +242,8 @@ class PromotionApprovalView(discord.ui.View):
                 f"🎉 **Congratulations!** You've been promoted to **{next_rank['rank_name']}**!\n"
                 f"Keep up the great work in the clan!"
             )
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not send promotion DM to user {member.id}: {e}")
 
         # Update the embed
         embed = interaction.message.embeds[0]
@@ -380,8 +380,8 @@ class RaidApprovalView(discord.ui.View):
                 await submitter.send(
                     f"❌ Your {event_type} submission has been declined by {interaction.user.mention}."
                 )
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not send decline notification DM: {e}")
 
         await interaction.followup.send("✅ Raid submission declined.", ephemeral=True)
 
@@ -482,8 +482,8 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                         f"🎉 You've been awarded **{points_value} points** for {event_type}!\n"
                         f"Use `/xp` to check your progress."
                     )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not send points award DM to user: {e}")
 
             # Check if now eligible for promotion
             eligibility = await database.check_promotion_eligibility(discord_id)

@@ -232,8 +232,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/promote {member.mention}` command timed out. This can happen due to network latency. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in promote: {e}")
@@ -445,8 +445,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/add-points` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in add-points: {e}")
@@ -599,8 +599,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/points-remove` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in points-remove: {e}")
@@ -698,8 +698,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/set-admin-channel` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in set-admin-channel: {e}")
@@ -733,8 +733,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/view-pending` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in view-pending: {e}")
@@ -795,8 +795,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/check-member` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in check-member: {e}")
@@ -925,8 +925,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/list-roblox-ranks` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in list-roblox-ranks: {e}")
@@ -1019,8 +1019,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/compare-ranks` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in compare-ranks: {e}")
@@ -1184,8 +1184,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/list-ranks` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in list-ranks: {e}")
@@ -1277,8 +1277,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/verify-rank` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in verify-rank: {e}")
@@ -1374,8 +1374,8 @@ class AdminCommands(commands.Cog):
                     await interaction.user.send(
                         f"⚠️ Your `/sync` command timed out. Please try again."
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
                 logger.error(f"Error deferring interaction in sync: {e}")
