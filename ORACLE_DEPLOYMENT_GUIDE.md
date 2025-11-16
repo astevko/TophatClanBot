@@ -65,7 +65,6 @@ GRANT UNLIMITED TABLESPACE TO tophat_bot;
 1. In OCI Console, go to your Autonomous Database details
 2. Click **DB Connection**
 3. Select connection type:
-   - **TLS**: Most common (recommended)
    - **mTLS**: Requires wallet download
 
 4. Copy the connection string, which looks like:

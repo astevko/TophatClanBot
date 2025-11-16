@@ -13,6 +13,22 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+
+# Custom exceptions for better error handling
+class DatabaseError(Exception):
+    """Base database error."""
+    pass
+
+
+class DatabaseConnectionError(DatabaseError):
+    """Database connection failed."""
+    pass
+
+
+class DatabaseValidationError(DatabaseError):
+    """Input validation failed."""
+    pass
+
 # Global connection pool
 _pool = None
 
@@ -36,8 +52,9 @@ async def get_pool():
             )
             logger.info("Oracle connection pool created")
         except oracledb.Error as e:
-            logger.error(f"Failed to create Oracle connection pool: {e}")
-            raise
+            logger.error(f"Failed to create Oracle connection pool: {type(e).__name__}")
+            logger.debug(f"Full Oracle connection error details: {e}")
+            raise DatabaseConnectionError("Unable to connect to Oracle database")
     return _pool
 
 
@@ -82,6 +99,7 @@ async def init_database():
                 CREATE TABLE raid_submissions (
                     submission_id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                     submitter_id NUMBER(20) NOT NULL,
+                    event_type VARCHAR2(50) NOT NULL,
                     participants CLOB NOT NULL,
                     start_time VARCHAR2(50) NOT NULL,
                     end_time VARCHAR2(50) NOT NULL,
@@ -246,10 +264,20 @@ async def get_member_by_roblox(roblox_username: str) -> Optional[Dict[str, Any]]
 
 async def create_member(discord_id: int, roblox_username: str) -> bool:
     """Create a new member entry."""
+    # Input validation (SECURITY: Added per audit recommendations)
+    if not isinstance(discord_id, int) or discord_id <= 0:
+        raise DatabaseValidationError("Invalid Discord ID")
+    if not roblox_username or not isinstance(roblox_username, str):
+        raise DatabaseValidationError("Invalid Roblox username")
+    if len(roblox_username) > 100:
+        raise DatabaseValidationError("Roblox username too long (max 100 characters)")
+    if len(roblox_username.strip()) == 0:
+        raise DatabaseValidationError("Roblox username cannot be empty")
+    
     try:
         pool = await get_pool()
         connection = pool.acquire()
-
+        
         try:
             cursor = connection.cursor()
             cursor.execute(
@@ -257,15 +285,16 @@ async def create_member(discord_id: int, roblox_username: str) -> bool:
                 INSERT INTO members (discord_id, roblox_username, current_rank, points, created_at)
                 VALUES (:1, :2, 1, 0, :3)
                 """,
-                [discord_id, roblox_username, datetime.utcnow()],
+                [discord_id, roblox_username.strip(), datetime.utcnow()],
             )
             connection.commit()
-            logger.info(f"Created member: {discord_id} - {roblox_username}")
+            logger.info(f"Created member: {discord_id}")
             return True
         finally:
             pool.release(connection)
     except oracledb.IntegrityError as e:
-        logger.error(f"Failed to create member: {e}")
+        logger.error(f"Failed to create member: {type(e).__name__}")
+        logger.debug(f"Full error: {e}")
         return False
 
 
@@ -364,11 +393,27 @@ async def set_member_rank(discord_id: int, rank_order: int) -> bool:
         pool.release(connection)
 
 
+async def get_all_members() -> List[Dict[str, Any]]:
+    """Get all members from the database."""
+    pool = await get_pool()
+    connection = pool.acquire()
+    
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT * FROM members ORDER BY discord_id
+        """)
+        rows = cursor.fetchall()
+        return [_dict_from_row(cursor, row) for row in rows]
+    finally:
+        pool.release(connection)
+
+
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
     """Get top members by points."""
     pool = await get_pool()
     connection = pool.acquire()
-
+    
     try:
         cursor = connection.cursor()
         cursor.execute(
@@ -480,12 +525,13 @@ async def create_raid_submission(
         cursor.execute(
             """
             INSERT INTO raid_submissions
-            (submitter_id, participants, start_time, end_time, image_url, status, timestamp)
-            VALUES (:1, :2, :3, :4, :5, 'pending', :6)
-            RETURNING submission_id INTO :7
+            (submitter_id, event_type, participants, start_time, end_time, image_url, status, timestamp)
+            VALUES (:1, :2, :3, :4, :5, :6, 'pending', :7)
+            RETURNING submission_id INTO :8
             """,
             [
                 submitter_id,
+                event_type,
                 participants,
                 start_time,
                 end_time,
@@ -494,7 +540,7 @@ async def create_raid_submission(
                 cursor.var(oracledb.NUMBER),
             ],
         )
-        submission_id = cursor.getvalue(6)
+        submission_id = cursor.getvalue(7)
         connection.commit()
         logger.info(f"Created {event_type} submission {submission_id}")
         return int(submission_id)

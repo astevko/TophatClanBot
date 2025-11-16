@@ -21,6 +21,14 @@ class SanitizingFormatter(logging.Formatter):
         (r"DISCORD_BOT_TOKEN[=:][^\s,}\]]*", "DISCORD_BOT_TOKEN=<REDACTED>"),
         (r"ROBLOX_COOKIE[=:][^\s,}\]]*", "ROBLOX_COOKIE=<REDACTED>"),
         (r"ROBLOX_API_KEY[=:][^\s,}\]]*", "ROBLOX_API_KEY=<REDACTED>"),
+        # Database credentials (SECURITY: Added per audit recommendations)
+        (r"ORACLE_PASSWORD[=:][^\s,}\]]*", "ORACLE_PASSWORD=<REDACTED>"),
+        (r"ORACLE_USER[=:][^\s,}\]]*", "ORACLE_USER=<REDACTED>"),
+        (r"DATABASE_URL[=:][^\s,}\]]*", "DATABASE_URL=<REDACTED>"),
+        (r"password[=:][^\s,}\]]*", "password=<REDACTED>"),
+        (r"postgresql://[^\s]*", "postgresql://<REDACTED>"),
+        (r"dsn[=:][^\s,}\]]*", "dsn=<REDACTED>"),
+        (r"wallet_password[=:][^\s,}\]]*", "wallet_password=<REDACTED>"),
     ]
 
     def format(self, record: logging.LogRecord) -> str:

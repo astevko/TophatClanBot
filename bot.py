@@ -17,8 +17,10 @@ from config import Config
 from security_utils import SanitizingFormatter
 
 # Setup logging first with security sanitization
+# Get log level from environment variable (defaults to INFO)
+log_level = getattr(logging, Config.LOG_LEVEL, logging.INFO)
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("bot.log")],
 )
@@ -302,11 +304,7 @@ class TophatClanBot(commands.Bot):
 
     async def _get_all_members(self):
         """Get all members from database."""
-        async with database.aiosqlite.connect(database.DATABASE_PATH) as db:
-            db.row_factory = database.aiosqlite.Row
-            async with db.execute("SELECT * FROM members") as cursor:
-                rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+        return await database.get_all_members()
 
     async def _update_discord_role(
         self, member: discord.Member, old_rank_order: int, new_rank_order: int

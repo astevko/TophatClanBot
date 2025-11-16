@@ -42,6 +42,7 @@ async def init_database():
             CREATE TABLE IF NOT EXISTS raid_submissions (
                 submission_id SERIAL PRIMARY KEY,
                 submitter_id BIGINT NOT NULL,
+                event_type TEXT NOT NULL,
                 participants TEXT NOT NULL,
                 start_time TEXT NOT NULL,
                 end_time TEXT NOT NULL,
@@ -146,6 +147,24 @@ async def get_member(discord_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def get_member_by_roblox(roblox_username: str) -> Optional[Dict[str, Any]]:
+    """Get a member by their Roblox username (case-insensitive)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT m.*, r.rank_name, r.points_required
+            FROM members m
+            JOIN rank_requirements r ON m.current_rank = r.rank_order
+            WHERE LOWER(m.roblox_username) = LOWER($1)
+        """,
+            roblox_username,
+        )
+        if row:
+            return dict(row)
+        return None
+
+
 async def create_member(discord_id: int, roblox_username: str) -> bool:
     """Create a new member entry."""
     try:
@@ -200,6 +219,38 @@ async def add_points(discord_id: int, points: int) -> bool:
         return True
 
 
+async def check_promotion_eligibility(discord_id: int) -> Optional[Dict[str, Any]]:
+    """Check if a member is eligible for promotion. Returns next rank info if eligible, None otherwise."""
+    member = await get_member(discord_id)
+    if not member:
+        return None
+
+    # Get current rank info
+    current_rank = await get_rank_by_order(member["current_rank"])
+    if not current_rank:
+        return None
+
+    # Skip if current rank is admin-only (can't auto-promote from admin ranks)
+    if current_rank.get("admin_only", False):
+        return None
+
+    # Get next point-based rank
+    next_rank = await get_next_rank(member["current_rank"], include_admin_only=False)
+    if not next_rank:
+        return None  # Already at max rank
+
+    # Check if they have enough points
+    if member["points"] >= next_rank["points_required"]:
+        return {
+            "member": member,
+            "current_rank": current_rank,
+            "next_rank": next_rank,
+            "eligible": True,
+        }
+
+    return None
+
+
 async def set_member_rank(discord_id: int, rank_order: int) -> bool:
     """Set a member's rank."""
     pool = await get_pool()
@@ -213,6 +264,16 @@ async def set_member_rank(discord_id: int, rank_order: int) -> bool:
         )
         logger.info(f"Updated rank for member {discord_id} to {rank_order}")
         return True
+
+
+async def get_all_members() -> List[Dict[str, Any]]:
+    """Get all members from the database."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT * FROM members ORDER BY discord_id
+        """)
+        return [dict(row) for row in rows]
 
 
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
@@ -293,26 +354,32 @@ async def get_next_rank(
 
 
 async def create_raid_submission(
-    submitter_id: int, participants: str, start_time: str, end_time: str, image_url: str
+    submitter_id: int,
+    event_type: str,
+    participants: str,
+    start_time: str,
+    end_time: str,
+    image_url: str,
 ) -> int:
-    """Create a new raid submission and return its ID."""
+    """Create a new event submission and return its ID."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         submission_id = await conn.fetchval(
             """
             INSERT INTO raid_submissions
-            (submitter_id, participants, start_time, end_time, image_url, status, timestamp)
-            VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+            (submitter_id, event_type, participants, start_time, end_time, image_url, status, timestamp)
+            VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
             RETURNING submission_id
         """,
             submitter_id,
+            event_type,
             participants,
             start_time,
             end_time,
             image_url,
             datetime.utcnow(),
         )
-        logger.info(f"Created raid submission {submission_id}")
+        logger.info(f"Created {event_type} submission {submission_id}")
         return submission_id
 
 

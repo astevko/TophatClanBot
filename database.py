@@ -255,6 +255,17 @@ async def set_member_rank(discord_id: int, rank_order: int) -> bool:
         return True
 
 
+async def get_all_members() -> List[Dict[str, Any]]:
+    """Get all members from the database."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM members ORDER BY discord_id
+        """) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
     """Get top members by points."""
     async with aiosqlite.connect(DATABASE_PATH) as db:

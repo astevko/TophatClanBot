@@ -64,6 +64,9 @@ class Config:
     USE_ORACLE = ORACLE_USER is not None and ORACLE_PASSWORD is not None and ORACLE_DSN is not None
     USE_SQLITE = DATABASE_URL is None and not USE_ORACLE
 
+    # Logging Configuration
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    
     # Rate Limiting Configuration
     MAX_RATE_LIMIT_RETRIES = int(
         os.getenv("MAX_RATE_LIMIT_RETRIES", "3")
