@@ -82,4 +82,8 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 sudo systemctl enable tophat-bot
+
 sudo systemctl start tophat-bot
+sudo systemctl stop tophat-bot
+sudo journalctl -u tophat-bot -f
+sudo systemctl status tophat-bot
