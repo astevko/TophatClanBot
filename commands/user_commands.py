@@ -11,8 +11,16 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import database
 from config import Config
+
+# Import appropriate database module based on configuration
+if Config.USE_ORACLE:
+    import database_oracle as database
+elif Config.USE_SQLITE:
+    import database
+else:
+    import database_postgres as database
+
 from security_utils import (
     ERROR_CODES,
     check_admin_permissions,

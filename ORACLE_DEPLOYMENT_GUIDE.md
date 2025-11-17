@@ -244,7 +244,7 @@ Type=simple
 User=opc
 WorkingDirectory=/home/opc/TophatClanBot
 EnvironmentFile=/home/opc/TophatClanBot/.env
-ExecStart=/usr/bin/python3 /home/opc/TophatClanBot/bot.py
+ExecStart=/home/opc/.local/bin/uv run bot.py
 Restart=always
 RestartSec=10
 
