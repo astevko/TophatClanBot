@@ -288,7 +288,12 @@ async def get_database_rank_by_roblox_id(roblox_rank_id: int, roblox_rank_number
     Falls back to matching by rank number if ID doesn't match.
     """
     # Import here to avoid circular imports
-    import database
+    if Config.USE_ORACLE:
+        import database_oracle as database
+    elif Config.USE_SQLITE:
+        import database
+    else:
+        import database_postgres as database
 
     ranks = await database.get_all_ranks()
 
@@ -326,7 +331,12 @@ async def compare_ranks(discord_member_data: Dict[str, Any]) -> Optional[Dict[st
             }
 
         # Import here to avoid circular imports
-        import database
+        if Config.USE_ORACLE:
+            import database_oracle as database
+        elif Config.USE_SQLITE:
+            import database
+        else:
+            import database_postgres as database
 
         # Get the Discord rank info
         discord_rank = await database.get_rank_by_order(discord_member_data["current_rank"])
@@ -367,7 +377,12 @@ async def sync_member_rank_from_roblox(discord_id: int) -> Dict[str, Any]:
     Returns a dict with the sync results.
     """
     # Import here to avoid circular imports
-    import database
+    if Config.USE_ORACLE:
+        import database_oracle as database
+    elif Config.USE_SQLITE:
+        import database
+    else:
+        import database_postgres as database
 
     try:
         # Get member from database
