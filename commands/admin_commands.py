@@ -848,7 +848,7 @@ class AdminCommands(commands.Cog):
 
         embed.add_field(name="Discord", value=member.mention, inline=True)
         embed.add_field(name="Roblox", value=member_data["roblox_username"], inline=True)
-        embed.add_field(name="Member Since", value=member_data["created_at"][:10], inline=True)
+        embed.add_field(name="Member Since", value=member_data["created_at"].strftime("%Y-%m-%d"), inline=True)
 
         # Get current rank details
         current_rank_info = await database.get_rank_by_order(member_data["current_rank"])
