@@ -38,20 +38,26 @@ import database  # Always imports SQLite module!
 import database  # Always imports SQLite module!
 ```
 
+**roblox_api.py** (incorrect):
+```python
+import database  # Always imports SQLite module! (3 lazy imports)
+```
+
 This caused a **split-brain scenario**:
 - Bot initialization used `database_oracle` ✅
 - All commands used `database` (SQLite) ❌
 
 ## Fix Applied
 
-Updated both command files to use the same conditional import logic:
+Updated all command and API files to use the same conditional import logic:
 
 ### Changes Made
 
 1. **commands/admin_commands.py** (lines 13-22)
 2. **commands/user_commands.py** (lines 14-22)
+3. **roblox_api.py** (lines 291-296, 334-339, 380-385 - three functions)
 
-Both now include:
+All now include:
 ```python
 # Import appropriate database module based on configuration
 if Config.USE_ORACLE:
@@ -150,6 +156,7 @@ We chose option 1 for consistency with `bot.py`.
 
 - `commands/admin_commands.py` - Updated database import logic
 - `commands/user_commands.py` - Updated database import logic
+- `roblox_api.py` - Updated database import logic (3 lazy imports fixed)
 
 ## Verification
 
