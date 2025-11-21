@@ -28,7 +28,7 @@ This meant:
 
 ## ✅ The Fix
 
-Updated all command and API files to use the same conditional import logic as `bot.py`:
+Updated both command files to use the same conditional import logic as `bot.py`:
 
 ```python
 # Import appropriate database module based on configuration
@@ -46,7 +46,6 @@ Now all parts of the bot respect the database configuration!
 
 1. `commands/admin_commands.py` - Lines 13-22
 2. `commands/user_commands.py` - Lines 14-22
-3. `roblox_api.py` - Lines 291-296, 334-339, 380-385 (3 functions with lazy imports)
 
 ## 🚀 How to Deploy
 
@@ -133,7 +132,6 @@ All your Discord commands should work perfectly! 🎊
 **Files to commit**: 
 - `commands/admin_commands.py`
 - `commands/user_commands.py`
-- `roblox_api.py`
 - All new documentation and diagnostic tools
 
 **Deploy time**: ~2 minutes
