@@ -10,6 +10,14 @@ import aiohttp
 
 from config import Config
 
+# Import appropriate database module based on configuration
+if Config.USE_ORACLE:
+    import database_oracle as database
+elif Config.USE_SQLITE:
+    import database
+else:
+    import database_postgres as database
+
 logger = logging.getLogger(__name__)
 
 # Roblox API endpoints
@@ -287,9 +295,6 @@ async def get_database_rank_by_roblox_id(roblox_rank_id: int, roblox_rank_number
     Get the database rank that corresponds to a Roblox group rank ID.
     Falls back to matching by rank number if ID doesn't match.
     """
-    # Import here to avoid circular imports
-    import database
-
     ranks = await database.get_all_ranks()
 
     # First try: Match by exact Roblox rank ID
@@ -324,9 +329,6 @@ async def compare_ranks(discord_member_data: Dict[str, Any]) -> Optional[Dict[st
                 "status": "error",
                 "message": f"Could not fetch Roblox rank for {discord_member_data['roblox_username']}",
             }
-
-        # Import here to avoid circular imports
-        import database
 
         # Get the Discord rank info
         discord_rank = await database.get_rank_by_order(discord_member_data["current_rank"])
@@ -366,9 +368,6 @@ async def sync_member_rank_from_roblox(discord_id: int) -> Dict[str, Any]:
     Sync a member's Discord rank with their current Roblox rank.
     Returns a dict with the sync results.
     """
-    # Import here to avoid circular imports
-    import database
-
     try:
         # Get member from database
         member = await database.get_member(discord_id)
