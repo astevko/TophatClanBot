@@ -234,6 +234,54 @@ class TophatClanBot(commands.Bot):
                 f"An error occurred: {str(error)}", ephemeral=True
             )
 
+    async def on_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
+        """Global error handler for app commands (slash commands)."""
+        # Handle cooldown errors with a user-friendly message
+        if isinstance(error, app_commands.CommandOnCooldown):
+            # Format the remaining time nicely
+            remaining = int(error.retry_after)
+            minutes, seconds = divmod(remaining, 60)
+            
+            if minutes > 0:
+                time_str = f"{minutes} minute{'s' if minutes != 1 else ''} and {seconds} second{'s' if seconds != 1 else ''}"
+            else:
+                time_str = f"{seconds} second{'s' if seconds != 1 else ''}"
+            
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(
+                        f"⏱️ **Cooldown Active**\n\n"
+                        f"Please wait {time_str} before using this command again.\n\n"
+                        f"*This cooldown helps prevent spam and abuse.*",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message(
+                        f"⏱️ **Cooldown Active**\n\n"
+                        f"Please wait {time_str} before using this command again.\n\n"
+                        f"*This cooldown helps prevent spam and abuse.*",
+                        ephemeral=True
+                    )
+            except Exception as e:
+                logger.error(f"Error sending cooldown message: {e}", exc_info=True)
+            return
+
+        # Log other errors
+        logger.error(f"App command error in {interaction.command.name if interaction.command else 'unknown'}: {error}", exc_info=error)
+        
+        # Send a generic error message for other errors
+        try:
+            error_message = "❌ An error occurred while processing your command. Please try again later."
+            
+            if interaction.response.is_done():
+                await interaction.followup.send(error_message, ephemeral=True)
+            else:
+                await interaction.response.send_message(error_message, ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error sending error message: {e}", exc_info=True)
+
     @tasks.loop(hours=1)
     async def auto_sync_ranks(self):
         """Background task to automatically sync ranks every hour (Roblox is source of truth)."""
