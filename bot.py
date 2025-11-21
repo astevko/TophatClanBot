@@ -241,31 +241,45 @@ class TophatClanBot(commands.Bot):
         # Handle cooldown errors with a user-friendly message
         if isinstance(error, app_commands.CommandOnCooldown):
             # Format the remaining time nicely
-            remaining = int(error.retry_after)
-            minutes, seconds = divmod(remaining, 60)
+            remaining = error.retry_after
+            minutes = int(remaining // 60)
+            seconds = int(remaining % 60)
             
             if minutes > 0:
                 time_str = f"{minutes} minute{'s' if minutes != 1 else ''} and {seconds} second{'s' if seconds != 1 else ''}"
             else:
                 time_str = f"{seconds} second{'s' if seconds != 1 else ''}"
             
+            cooldown_message = (
+                f"⏱️ **Cooldown Active**\n\n"
+                f"Please wait {time_str} before using this command again.\n\n"
+                f"*This cooldown helps prevent spam and abuse.*"
+            )
+            
             try:
-                if interaction.response.is_done():
-                    await interaction.followup.send(
-                        f"⏱️ **Cooldown Active**\n\n"
-                        f"Please wait {time_str} before using this command again.\n\n"
-                        f"*This cooldown helps prevent spam and abuse.*",
+                # Cooldown checks happen before command execution, so interaction hasn't been responded to yet
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        cooldown_message,
                         ephemeral=True
                     )
                 else:
-                    await interaction.response.send_message(
-                        f"⏱️ **Cooldown Active**\n\n"
-                        f"Please wait {time_str} before using this command again.\n\n"
-                        f"*This cooldown helps prevent spam and abuse.*",
+                    # Fallback: if somehow the interaction was already responded to, use followup
+                    await interaction.followup.send(
+                        cooldown_message,
                         ephemeral=True
                     )
             except Exception as e:
                 logger.error(f"Error sending cooldown message: {e}", exc_info=True)
+                # Try alternative method if the first one failed
+                try:
+                    if interaction.response.is_done():
+                        await interaction.followup.send(
+                            f"⏱️ You're on cooldown. Please wait a moment before trying again.",
+                            ephemeral=True
+                        )
+                except Exception as e2:
+                    logger.error(f"Error sending fallback cooldown message: {e2}", exc_info=True)
             return
 
         # Log other errors
