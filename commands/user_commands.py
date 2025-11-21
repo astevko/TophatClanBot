@@ -865,6 +865,9 @@ class UserCommands(commands.Cog):
                     old_rank = await database.get_rank_by_order(old_rank_order)
                     new_rank_name = target_db_rank["rank_name"] if target_db_rank else "Pending"
 
+                    # Assign Verified role
+                    await self._assign_verified_role(interaction.user)
+
                     await interaction.followup.send(
                         f"✅ Updated your Roblox username to **{username}**!\n"
                         f"📊 Your current Roblox rank: **{rank_info['rank_name']}** (Rank {rank_info['rank']})\n"
@@ -874,12 +877,27 @@ class UserCommands(commands.Cog):
                     logger.info(
                         f"Auto-synced {username} rank on link: {old_rank['rank_name']} → {new_rank_name}"
                     )
+                    
+                    # Send notification to admin channel
+                    await self._send_link_notification(
+                        interaction, username, rank_info, new_rank_name, is_new=False, rank_changed=True
+                    )
                 else:
+                    rank_name = target_db_rank["rank_name"] if target_db_rank else "Pending"
+                    
+                    # Assign Verified role
+                    await self._assign_verified_role(interaction.user)
+                    
                     await interaction.followup.send(
                         f"✅ Updated your Roblox username to **{username}**!\n"
                         f"📊 Your current Roblox rank: **{rank_info['rank_name']}** (Rank {rank_info['rank']})\n"
                         f"✓ Your ranks are already in sync!",
                         ephemeral=True,
+                    )
+                    
+                    # Send notification to admin channel
+                    await self._send_link_notification(
+                        interaction, username, rank_info, rank_name, is_new=False, rank_changed=False
                     )
             else:
                 await interaction.followup.send(
@@ -895,6 +913,9 @@ class UserCommands(commands.Cog):
 
                 # Assign rank role based on Roblox
                 await self._assign_rank_role(interaction.user, target_rank_order)
+                
+                # Assign Verified role
+                await self._assign_verified_role(interaction.user)
 
                 rank_name = target_db_rank["rank_name"] if target_db_rank else "Pending"
 
@@ -906,6 +927,11 @@ class UserCommands(commands.Cog):
                     ephemeral=True,
                 )
                 logger.info(f"New member {username} linked with rank {rank_name} from Roblox")
+                
+                # Send notification to admin channel
+                await self._send_link_notification(
+                    interaction, username, rank_info, rank_name, is_new=True, rank_changed=False
+                )
             else:
                 await interaction.followup.send(
                     "❌ Failed to link account. That Roblox username might already be taken.",
@@ -943,6 +969,130 @@ class UserCommands(commands.Cog):
         # Show modal for event details
         modal = RaidSubmissionModal(proof_image.url, interaction.user)
         await interaction.response.send_modal(modal)
+
+    async def _send_link_notification(
+        self,
+        interaction: discord.Interaction,
+        username: str,
+        rank_info: dict,
+        discord_rank_name: str,
+        is_new: bool,
+        rank_changed: bool,
+    ):
+        """Send a notification to the admin channel when a Roblox account is linked."""
+        try:
+            # Get admin channel
+            admin_channel_id = await database.get_config("admin_channel_id")
+            if not admin_channel_id:
+                admin_channel_id = Config.ADMIN_CHANNEL_ID
+            
+            if not admin_channel_id:
+                return  # No admin channel configured
+            
+            admin_channel = interaction.guild.get_channel(int(admin_channel_id))
+            if not admin_channel:
+                logger.warning(f"Admin channel {admin_channel_id} not found")
+                return
+            
+            # Create embed notification
+            if is_new:
+                embed = discord.Embed(
+                    title="🔗 New Account Linked",
+                    description=f"{interaction.user.mention} linked their Roblox account",
+                    color=0x43B581,  # Green
+                    timestamp=discord.utils.utcnow(),
+                )
+            else:
+                embed = discord.Embed(
+                    title="🔄 Account Re-linked",
+                    description=f"{interaction.user.mention} updated their Roblox account link",
+                    color=0xFAA61A,  # Orange
+                    timestamp=discord.utils.utcnow(),
+                )
+            
+            embed.add_field(name="Discord User", value=f"{interaction.user.name} ({interaction.user.id})", inline=True)
+            embed.add_field(name="Roblox Username", value=username, inline=True)
+            embed.add_field(name="Roblox Rank", value=f"{rank_info['rank_name']} (Rank {rank_info['rank']})", inline=True)
+            embed.add_field(name="Discord Rank", value=discord_rank_name, inline=True)
+            
+            if rank_changed:
+                embed.add_field(name="Status", value="✅ Rank auto-synced", inline=False)
+            
+            embed.set_footer(text=f"User ID: {interaction.user.id}")
+            
+            await admin_channel.send(embed=embed)
+            
+        except Exception as e:
+            # Don't fail the link operation if notification fails
+            logger.error(f"Failed to send link notification to admin channel: {e}")
+
+    async def _assign_verified_role(self, member: discord.Member):
+        """Assign the 'Verified' role to a member who has linked their Roblox account."""
+        try:
+            # Find or create the Verified role
+            verified_role = discord.utils.get(member.guild.roles, name="Verified")
+            
+            if not verified_role:
+                # Create the role if it doesn't exist
+                for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                    try:
+                        verified_role = await member.guild.create_role(
+                            name="Verified",
+                            reason="Role for members with linked Roblox accounts",
+                            color=discord.Color.green(),
+                        )
+                        logger.info("Created 'Verified' role")
+                        break
+                    except discord.Forbidden:
+                        logger.error("Bot doesn't have permission to create roles")
+                        return
+                    except discord.HTTPException as e:
+                        if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                            delay = Config.RATE_LIMIT_RETRY_DELAY * (2**attempt)
+                            logger.warning(
+                                f"Rate limited when creating Verified role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s"
+                            )
+                            await asyncio.sleep(delay)
+                        elif e.status == 429:
+                            logger.error(
+                                f"Failed to create Verified role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting"
+                            )
+                            return
+                        else:
+                            logger.error(f"HTTP error creating Verified role: {e}")
+                            return
+            
+            # Check if member already has the role
+            if verified_role in member.roles:
+                return  # Already verified
+            
+            # Assign the Verified role
+            for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
+                try:
+                    await member.add_roles(verified_role)
+                    logger.info(f"Assigned Verified role to {member.name} ({member.id})")
+                    break
+                except discord.Forbidden:
+                    logger.error("Bot doesn't have permission to assign roles")
+                    return
+                except discord.HTTPException as e:
+                    if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
+                        delay = Config.RATE_LIMIT_RETRY_DELAY * (2**attempt)
+                        logger.warning(
+                            f"Rate limited when adding Verified role (attempt {attempt + 1}/{Config.MAX_RATE_LIMIT_RETRIES}) - retrying after {delay}s"
+                        )
+                        await asyncio.sleep(delay)
+                    elif e.status == 429:
+                        logger.error(
+                            f"Failed to add Verified role after {Config.MAX_RATE_LIMIT_RETRIES} attempts due to rate limiting"
+                        )
+                        return
+                    else:
+                        logger.error(f"HTTP error adding Verified role: {e}")
+                        return
+                        
+        except Exception as e:
+            logger.error(f"Error assigning Verified role: {e}")
 
     async def _assign_rank_role(self, member: discord.Member, rank_order: int):
         """Assign Discord role based on rank."""
