@@ -441,6 +441,10 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
 
         # Parse and award points to participants (Roblox usernames)
         participants_text = submission["participants"]
+        
+        # Ensure participants_text is a string (Oracle CLOB might return different types)
+        if not isinstance(participants_text, str):
+            participants_text = str(participants_text) if participants_text is not None else ""
 
         # Split by comma, newline, or whitespace and clean up
         raw_usernames = re.split(r"[,\n]+", participants_text)
