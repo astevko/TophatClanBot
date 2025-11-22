@@ -566,7 +566,16 @@ async def create_raid_submission(
             ],
         )
         # Get the value from the variable object, not the cursor
-        submission_id = return_var.getvalue()
+        # getvalue() returns a list, so get the first element
+        submission_id_value = return_var.getvalue()
+        if isinstance(submission_id_value, list):
+            submission_id = submission_id_value[0] if submission_id_value else None
+        else:
+            submission_id = submission_id_value
+        
+        if submission_id is None:
+            raise ValueError("Failed to get submission_id from RETURNING clause")
+        
         connection.commit()
         logger.info(f"Created {event_type} submission {submission_id}")
         return int(submission_id)
