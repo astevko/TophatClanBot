@@ -543,6 +543,9 @@ async def create_raid_submission(
 
     try:
         cursor = connection.cursor()
+        # Create the return variable for the RETURNING clause
+        return_var = cursor.var(oracledb.NUMBER)
+        
         # Use RETURNING clause to get the generated ID
         cursor.execute(
             """
@@ -559,10 +562,11 @@ async def create_raid_submission(
                 end_time,
                 image_url,
                 datetime.utcnow(),
-                cursor.var(oracledb.NUMBER),
+                return_var,  # Pass the variable object
             ],
         )
-        submission_id = cursor.getvalue(7)
+        # Get the value from the variable object, not the cursor
+        submission_id = return_var.getvalue()
         connection.commit()
         logger.info(f"Created {event_type} submission {submission_id}")
         return int(submission_id)
