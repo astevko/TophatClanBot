@@ -852,7 +852,7 @@ class AdminCommands(commands.Cog):
         
         # Format created_at - handle both datetime objects and strings
         created_at = member_data["created_at"]
-        if isinstance(created_at, datetime.datetime):
+        if isinstance(created_at, datetime):
             created_at_str = created_at.strftime("%Y-%m-%d")
         elif isinstance(created_at, str):
             created_at_str = created_at[:10] if len(created_at) >= 10 else created_at
