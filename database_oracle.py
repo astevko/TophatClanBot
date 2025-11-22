@@ -115,6 +115,28 @@ async def init_database():
             error_obj, = e.args
             if error_obj.code == 955:  # Table already exists
                 logger.info("Raid submissions table already exists")
+                
+                # Check if event_type column exists, add it if missing (migration)
+                try:
+                    cursor.execute("""
+                        SELECT COUNT(*) 
+                        FROM user_tab_columns 
+                        WHERE table_name = 'RAID_SUBMISSIONS' 
+                        AND column_name = 'EVENT_TYPE'
+                    """)
+                    event_type_exists = cursor.fetchone()[0] > 0
+                    
+                    if not event_type_exists:
+                        logger.info("Adding event_type column to existing raid_submissions table")
+                        cursor.execute("""
+                            ALTER TABLE raid_submissions 
+                            ADD event_type VARCHAR2(50) DEFAULT 'Raid' NOT NULL
+                        """)
+                        connection.commit()
+                        logger.info("Added event_type column to raid_submissions table")
+                except oracledb.DatabaseError as e2:
+                    error_obj2, = e2.args
+                    logger.warning(f"Could not check/add event_type column: {error_obj2.message}")
             else:
                 raise
 
