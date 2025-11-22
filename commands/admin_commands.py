@@ -4,6 +4,7 @@ Commands restricted to administrators for managing the clan.
 """
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import discord
@@ -848,7 +849,17 @@ class AdminCommands(commands.Cog):
 
         embed.add_field(name="Discord", value=member.mention, inline=True)
         embed.add_field(name="Roblox", value=member_data["roblox_username"], inline=True)
-        embed.add_field(name="Member Since", value=member_data["created_at"][:10], inline=True)
+        
+        # Format created_at - handle both datetime objects and strings
+        created_at = member_data["created_at"]
+        if isinstance(created_at, datetime.datetime):
+            created_at_str = created_at.strftime("%Y-%m-%d")
+        elif isinstance(created_at, str):
+            created_at_str = created_at[:10] if len(created_at) >= 10 else created_at
+        else:
+            created_at_str = str(created_at)[:10]
+        
+        embed.add_field(name="Member Since", value=created_at_str, inline=True)
 
         # Get current rank details
         current_rank_info = await database.get_rank_by_order(member_data["current_rank"])
