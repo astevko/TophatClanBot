@@ -253,7 +253,6 @@ class TophatClanBot(commands.Bot):
             cooldown_message = (
                 f"⏱️ **Cooldown Active**\n\n"
                 f"Please wait {time_str} before using this command again.\n\n"
-                f"*This cooldown helps prevent spam and abuse.*"
             )
             
             try:

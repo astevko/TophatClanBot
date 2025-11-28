@@ -431,7 +431,7 @@ class AdminCommands(commands.Cog):
         # )
 
     @app_commands.command(
-        name="add-points", description="[ELITE+] Manually add or remove points from a member"
+        name="points-add", description="[Officer+] Manually add or remove points from a member"
     )
     @app_commands.describe(
         member="The member to adjust points for",
@@ -587,7 +587,7 @@ class AdminCommands(commands.Cog):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="points-remove", description="[HICOM] Remove points from a member")
+    @app_commands.command(name="points-remove", description="[Officer+] Remove points from a member")
     @app_commands.describe(
         member="The member to remove points from", points="Number of points to remove"
     )
@@ -924,7 +924,7 @@ class AdminCommands(commands.Cog):
 
     @app_commands.command(
         name="list-roblox-ranks",
-        description="[ADMIN] View all ranks from your Roblox group with their IDs",
+        description="[ADMIN] View all ranks from the Top Hat Clan group with their IDs",
     )
     @is_admin()
     async def list_roblox_ranks(self, interaction: discord.Interaction):
@@ -1184,7 +1184,7 @@ class AdminCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error sending compare-ranks response: {e}")
 
-    @app_commands.command(name="list-ranks", description="[ADMIN] View all rank requirements")
+    @app_commands.command(name="rank-requirements", description="[Personnel+] View all rank requirements")
     @is_admin()
     async def list_ranks(self, interaction: discord.Interaction):
         """List all ranks and their requirements."""
@@ -1193,20 +1193,20 @@ class AdminCommands(commands.Cog):
                 await interaction.response.defer(ephemeral=True)
             except discord.errors.NotFound:
                 logger.warning(
-                    f"Interaction expired for list-ranks command - user: {interaction.user.name}"
+                    f"Interaction expired for rank-requirements command - user: {interaction.user.name}"
                 )
                 try:
                     await interaction.user.send(
-                        "⚠️ Your `/list-ranks` command timed out. Please try again."
+                        "⚠️ Your `/rank-requirements` command timed out. Please try again."
                     )
                 except Exception as e:
                     logger.debug(f"Could not send timeout DM to user {interaction.user.id}: {e}")
                 return
             except Exception as e:
-                logger.error(f"Error deferring interaction in list-ranks: {e}")
+                logger.error(f"Error deferring interaction in rank-requirements: {e}")
                 return
         else:
-            logger.warning("Interaction already responded to in list-ranks command")
+            logger.warning("Interaction already responded to in rank-requirements command")
             return
 
         ranks = await database.get_all_ranks()
@@ -1216,7 +1216,7 @@ class AdminCommands(commands.Cog):
         admin_only_ranks = [r for r in ranks if r.get("admin_only", False)]
 
         embed = discord.Embed(
-            title="🎖️ Clan Rank System",
+            title="🎖️ Rank System",
             description="Complete overview of all ranks",
             color=discord.Color.gold(),
         )
@@ -1228,7 +1228,7 @@ class AdminCommands(commands.Cog):
                 point_ranks_text += f"**{rank['rank_order']}. {rank['rank_name']}** - {rank['points_required']} pts\n"
 
             embed.add_field(
-                name="📊 Point-Based Ranks (Earn through raids)",
+                name="📊 Point-Based Ranks (Earn through Events)",
                 value=point_ranks_text,
                 inline=False,
             )
@@ -1242,29 +1242,19 @@ class AdminCommands(commands.Cog):
 
             if leadership:
                 leadership_text = "\n".join(
-                    [f"**{r['rank_order']}. {r['rank_name']}**" for r in leadership]
+                    [f"• **{r['rank_order']}. {r['rank_name']}**" for r in leadership]
                 )
                 embed.add_field(
-                    name="⚡ Leadership Ranks (HICOM-granted)", value=leadership_text, inline=True
+                    name="⚡ Leadership Ranks (HICOM)", value=leadership_text, inline=False
                 )
 
             if honorary:
                 honorary_text = "\n".join(
-                    [f"**{r['rank_order']}. {r['rank_name']}**" for r in honorary]
+                    [f"• **{r['rank_order']}. {r['rank_name']}**" for r in honorary]
                 )
                 embed.add_field(
-                    name="🏆 Honorary Ranks (HICOM-Granted)", value=honorary_text, inline=True
+                    name="🏆 Honorary Ranks (HICOM-Granted)", value=honorary_text, inline=False
                 )
-
-            if trial:
-                trial_text = "\n".join([f"**{r['rank_order']}. {r['rank_name']}**" for r in trial])
-                embed.add_field(
-                    name="🔰 Trial/Probation (HICOM-ranted)", value=trial_text, inline=True
-                )
-
-        embed.set_footer(
-            text="Use /promote to assign any rank manually | /check-member to see eligibility"
-        )
 
         try:
             await interaction.followup.send(embed=embed, ephemeral=True)
