@@ -687,14 +687,14 @@ class AdminCommands(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(
-        name="set-admin-channel", description="[ADMIN] Set the channel for raid submissions"
+        name="set-admin-channel", description="[ADMIN] Set the channel for Event submissions"
     )
     @app_commands.describe(channel="The channel where raid submissions will be posted")
     @is_admin()
     async def set_admin_channel(
         self, interaction: discord.Interaction, channel: discord.TextChannel
     ):
-        """Set the admin channel for raid submissions."""
+        """Set the admin channel for Event submissions."""
         if not interaction.response.is_done():
             try:
                 await interaction.response.defer(ephemeral=True)
@@ -720,12 +720,12 @@ class AdminCommands(commands.Cog):
         await database.set_config("admin_channel_id", str(channel.id))
 
         await interaction.followup.send(
-            f"✅ Admin channel set to {channel.mention}. All raid submissions will be posted there.",
+            f"✅ Admin channel set to {channel.mention}. All Event submissions will be posted there.",
             ephemeral=True,
         )
 
     @app_commands.command(
-        name="view-pending", description="[HICOM] View all pending raid submissions"
+        name="view-pending", description="[HICOM] View all pending event submissions"
     )
     @is_admin()
     async def view_pending(self, interaction: discord.Interaction):
@@ -1259,9 +1259,9 @@ class AdminCommands(commands.Cog):
         try:
             await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.errors.NotFound:
-            logger.warning("Interaction expired before sending list-ranks response")
+            logger.warning("Interaction expired before sending rank-requirements response")
         except Exception as e:
-            logger.error(f"Error sending list-ranks response: {e}")
+            logger.error(f"Error sending rank-requirements response: {e}")
 
     @app_commands.command(
         name="verify-rank",
