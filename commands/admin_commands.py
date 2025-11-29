@@ -771,6 +771,52 @@ class AdminCommands(commands.Cog):
         )
 
     @app_commands.command(
+        name="set-point-log-channel",
+        description="[ADMIN] Set the channel for point award logs",
+    )
+    @app_commands.describe(
+        channel="The channel where point awards will be logged with participant pings"
+    )
+    @is_admin()
+    async def set_point_log_channel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
+        """Set the point log channel for point award notifications."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for set-point-log-channel command - user: {interaction.user.name}"
+                )
+                try:
+                    await interaction.user.send(
+                        "⚠️ Your `/set-point-log-channel` command timed out. Please try again."
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Could not send timeout DM to user {interaction.user.id}: {e}"
+                    )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in set-point-log-channel: {e}")
+                return
+        else:
+            logger.warning(
+                "Interaction already responded to in set-point-log-channel command"
+            )
+            return
+
+        # Update config
+        await database.set_config("point_log_channel_id", str(channel.id))
+
+        await interaction.followup.send(
+            f"✅ Point log channel set to {channel.mention}. "
+            f"Point awards will be logged there with participant pings.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(
         name="view-pending", description="[HICOM] View all pending event submissions"
     )
     @is_admin()

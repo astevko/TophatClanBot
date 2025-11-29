@@ -495,7 +495,7 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
 
                     cleaned_fields = []
                     for field in public_embed.fields:
-                        if field.name in ("Submission ID", "Status", "Reviewed By"):
+                        if field.name in ("Submission ID", "Status", "Reviewed By", "Points Awarded"):
                             continue
                         cleaned_fields.append(field)
 
@@ -510,6 +510,45 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
         except Exception as e:
             # Do not break approval flow if public logging fails
             logger.error(f"Failed to send public event log message: {e}")
+
+        # Send point log message to the point log channel
+        try:
+            point_log_channel_id = await database.get_config("point_log_channel_id")
+            if not point_log_channel_id:
+                # Optional fallback to static config if defined
+                point_log_channel_id = getattr(Config, "POINT_LOG_CHANNEL_ID", 0)
+
+            if point_log_channel_id:
+                point_log_channel = interaction.guild.get_channel(int(point_log_channel_id))
+                if point_log_channel:
+                    # Get submitter (host) Discord member
+                    submitter = interaction.guild.get_member(submission["submitter_id"])
+                    
+                    # Build point log message
+                    point_log_msg = ""
+                    
+                    # Add host line
+                    if submitter:
+                        point_log_msg += f"Host: {submitter.mention} +{points_value}\n"
+                    else:
+                        # Fallback if submitter not found
+                        point_log_msg += f"Host: <@{submission['submitter_id']}> +{points_value}\n"
+                    
+                    # Add participants section
+                    if awarded_discord_ids:
+                        point_log_msg += "\nParticipants:\n"
+                        for discord_id in awarded_discord_ids:
+                            participant = interaction.guild.get_member(discord_id)
+                            if participant:
+                                point_log_msg += f"{participant.mention} +{points_value}\n"
+                            else:
+                                # Fallback if participant not found
+                                point_log_msg += f"<@{discord_id}> +{points_value}\n"
+                    
+                    await point_log_channel.send(point_log_msg)
+        except Exception as e:
+            # Do not break approval flow if point logging fails
+            logger.error(f"Failed to send point log message: {e}")
 
         # Notify participants and check for promotion eligibility
         event_type = submission.get("event_type", "event")
