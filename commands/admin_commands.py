@@ -1245,7 +1245,7 @@ class AdminCommands(commands.Cog):
                     [f"• **{r['rank_order']}. {r['rank_name']}**" for r in leadership]
                 )
                 embed.add_field(
-                    name="⚡ Leadership Ranks (HICOM)", value=leadership_text, inline=False
+                    name="⚡ Leadership Ranks (HICOM)", value=leadership_text, inline=True
                 )
 
             if honorary:
@@ -1253,7 +1253,7 @@ class AdminCommands(commands.Cog):
                     [f"• **{r['rank_order']}. {r['rank_name']}**" for r in honorary]
                 )
                 embed.add_field(
-                    name="🏆 Honorary Ranks (HICOM-Granted)", value=honorary_text, inline=False
+                    name="🏆 Honorary Ranks (HICOM-Granted)", value=honorary_text, inline=True
                 )
 
         try:
