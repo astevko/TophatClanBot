@@ -452,6 +452,7 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
 
         awarded_members = []
         awarded_discord_ids = []
+        unlinked_participants = []  # Track unlinked participants for point log
         for username in usernames:
             member = await database.get_member_by_roblox(username)
 
@@ -459,6 +460,9 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                 await database.add_points(member["discord_id"], points_value)
                 awarded_members.append(f"{username} (<@{member['discord_id']}>)")
                 awarded_discord_ids.append(member["discord_id"])
+            else:
+                # Track unlinked participants
+                unlinked_participants.append(username)
 
         # Update embed in the admin channel message
         admin_embed = self.approval_interaction.message.embeds[0]
@@ -535,8 +539,10 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                         point_log_msg += f"Host: <@{submission['submitter_id']}> +{points_value}\n"
                     
                     # Add participants section
-                    if awarded_discord_ids:
+                    if awarded_discord_ids or unlinked_participants:
                         point_log_msg += "\nParticipants:\n"
+                        
+                        # Add linked participants with Discord pings
                         for discord_id in awarded_discord_ids:
                             participant = interaction.guild.get_member(discord_id)
                             if participant:
@@ -544,6 +550,10 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                             else:
                                 # Fallback if participant not found
                                 point_log_msg += f"<@{discord_id}> +{points_value}\n"
+                        
+                        # Add unlinked participants with Roblox username
+                        for username in unlinked_participants:
+                            point_log_msg += f"{username} +{points_value}\n"
                     
                     await point_log_channel.send(point_log_msg)
         except Exception as e:
