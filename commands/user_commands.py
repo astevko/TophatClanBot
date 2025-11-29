@@ -460,25 +460,56 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                 awarded_members.append(f"{username} (<@{member['discord_id']}>)")
                 awarded_discord_ids.append(member["discord_id"])
 
-        # Update embed
-        embed = self.approval_interaction.message.embeds[0]
-        embed.color = discord.Color.green()
+        # Update embed in the admin channel message
+        admin_embed = self.approval_interaction.message.embeds[0]
+        admin_embed.color = discord.Color.green()
 
         # Update status field
-        for i, field in enumerate(embed.fields):
+        for i, field in enumerate(admin_embed.fields):
             if field.name == "Status":
-                embed.set_field_at(i, name="Status", value="✅ Approved", inline=True)
+                admin_embed.set_field_at(i, name="Status", value="✅ Approved", inline=True)
                 break
 
-        embed.add_field(name="Points Awarded", value=str(points_value), inline=True)
-        embed.add_field(name="Reviewed By", value=interaction.user.mention, inline=True)
+        admin_embed.add_field(name="Points Awarded", value=str(points_value), inline=True)
+        admin_embed.add_field(name="Reviewed By", value=interaction.user.mention, inline=True)
 
-        # Get the view and disable buttons
+        # Get the view and disable buttons on the admin message
         view = discord.ui.View.from_message(self.approval_interaction.message)
         for item in view.children:
             item.disabled = True
 
-        await self.approval_interaction.message.edit(embed=embed, view=view)
+        await self.approval_interaction.message.edit(embed=admin_embed, view=view)
+
+        # Send a sanitized copy of the approved embed to the PUBLIC event log channel
+        try:
+            public_channel_id = await database.get_config("public_event_log_channel_id")
+            if not public_channel_id:
+                # Optional fallback to static config if defined
+                public_channel_id = getattr(Config, "PUBLIC_EVENT_LOG_CHANNEL_ID", 0)
+
+            if public_channel_id:
+                public_channel = interaction.guild.get_channel(int(public_channel_id))
+                if public_channel:
+                    # Clone the admin embed and remove Submission ID + Status fields
+                    public_embed = admin_embed.copy()
+
+                    cleaned_fields = []
+                    for field in public_embed.fields:
+                        if field.name in ("Submission ID", "Status"):
+                            continue
+                        cleaned_fields.append(field)
+
+                    # Clear and re-add fields to respect ordering minus removed ones
+                    public_embed.clear_fields()
+                    for field in cleaned_fields:
+                        public_embed.add_field(
+                            name=field.name, value=field.value, inline=field.inline
+                        )
+
+                    await public_channel.send(embed=public_embed)
+        except Exception as e:
+            # Do not break approval flow if public logging fails
+            logger.error(f"Failed to send public event log message: {e}")
 
         # Notify participants and check for promotion eligibility
         event_type = submission.get("event_type", "event")

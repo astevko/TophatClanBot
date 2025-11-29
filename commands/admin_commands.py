@@ -725,6 +725,52 @@ class AdminCommands(commands.Cog):
         )
 
     @app_commands.command(
+        name="set-event-log-channel",
+        description="[ADMIN] Set the PUBLIC channel for approved event logs",
+    )
+    @app_commands.describe(
+        channel="The PUBLIC channel where approved events will be logged (no buttons)"
+    )
+    @is_admin()
+    async def set_event_log_channel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
+        """Set the public event log channel for approved raid/event submissions."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for set-event-log-channel command - user: {interaction.user.name}"
+                )
+                try:
+                    await interaction.user.send(
+                        "⚠️ Your `/set-event-log-channel` command timed out. Please try again."
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Could not send timeout DM to user {interaction.user.id}: {e}"
+                    )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in set-event-log-channel: {e}")
+                return
+        else:
+            logger.warning(
+                "Interaction already responded to in set-event-log-channel command"
+            )
+            return
+
+        # Update config
+        await database.set_config("public_event_log_channel_id", str(channel.id))
+
+        await interaction.followup.send(
+            f"✅ Public event log channel set to {channel.mention}. "
+            f"Approved events will be logged there without admin buttons.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(
         name="view-pending", description="[HICOM] View all pending event submissions"
     )
     @is_admin()
