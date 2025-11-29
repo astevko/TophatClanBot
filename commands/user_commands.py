@@ -495,7 +495,7 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
 
                     cleaned_fields = []
                     for field in public_embed.fields:
-                        if field.name in ("Submission ID", "Status"):
+                        if field.name in ("Submission ID", "Status", "Reviewed By"):
                             continue
                         cleaned_fields.append(field)
 
