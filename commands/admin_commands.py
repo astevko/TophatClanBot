@@ -1240,20 +1240,20 @@ class AdminCommands(commands.Cog):
             honorary = [r for r in admin_only_ranks if r["rank_order"] in [15, 16, 17, 18]]
             trial = [r for r in admin_only_ranks if r["rank_order"] in [19, 20]]
 
-            if leadership:
-                leadership_text = "\n".join(
-                    [f"• **{r['rank_order']}. {r['rank_name']}**" for r in leadership]
-                )
-                embed.add_field(
-                    name="⚡ Leadership Ranks (HICOM)", value=leadership_text, inline=True
-                )
-
             if honorary:
                 honorary_text = "\n".join(
                     [f"• **{r['rank_order']}. {r['rank_name']}**" for r in honorary]
                 )
                 embed.add_field(
                     name="🏆 Honorary Ranks (HICOM-Granted)", value=honorary_text, inline=True
+                )
+
+            if leadership:
+                leadership_text = "\n".join(
+                    [f"• **{r['rank_order']}. {r['rank_name']}**" for r in leadership]
+                )
+                embed.add_field(
+                    name="⚡ Leadership Ranks (HICOM)", value=leadership_text, inline=True
                 )
 
         try:
