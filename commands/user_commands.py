@@ -497,17 +497,40 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                     # Clone the admin embed and remove Submission ID + Status fields
                     public_embed = admin_embed.copy()
 
+                    # Check if this is a solo event (host is the only participant)
+                    submitter_member = await database.get_member(submission["submitter_id"])
+                    is_solo_event = False
+                    if submitter_member and len(usernames) == 1:
+                        # Check if the only participant is the submitter
+                        submitter_roblox = submitter_member.get("roblox_username", "").lower()
+                        if submitter_roblox and usernames[0].strip().lower() == submitter_roblox:
+                            is_solo_event = True
+
                     cleaned_fields = []
                     for field in public_embed.fields:
                         if field.name in ("Submission ID", "Status", "Reviewed By", "Points Awarded"):
                             continue
-                        cleaned_fields.append(field)
+                        
+                        # Replace Participants field value if solo event
+                        if field.name == "Participants (Roblox)" and is_solo_event:
+                            # Use "Solo Event" as the value instead
+                            cleaned_fields.append({
+                                "name": field.name,
+                                "value": "Solo Event",
+                                "inline": field.inline
+                            })
+                        else:
+                            cleaned_fields.append({
+                                "name": field.name,
+                                "value": field.value,
+                                "inline": field.inline
+                            })
 
                     # Clear and re-add fields to respect ordering minus removed ones
                     public_embed.clear_fields()
                     for field in cleaned_fields:
                         public_embed.add_field(
-                            name=field.name, value=field.value, inline=field.inline
+                            name=field["name"], value=field["value"], inline=field["inline"]
                         )
 
                     await public_channel.send(embed=public_embed)
@@ -528,34 +551,57 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
                     # Get submitter (host) Discord member
                     submitter = interaction.guild.get_member(submission["submitter_id"])
                     
-                    # Build point log message
-                    point_log_msg = ""
+                    # Get event type for embed title
+                    event_type = submission.get("event_type", "Event")
                     
-                    # Add host line
+                    # Create embed for point log
+                    embed = discord.Embed(
+                        title=f"🎯 {event_type} - Points Awarded",
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow(),
+                    )
+                    
+                    # Add host field
                     if submitter:
-                        point_log_msg += f"Host: {submitter.mention} +{points_value}\n"
+                        embed.add_field(
+                            name="Host",
+                            value=f"{submitter.mention} +{points_value}",
+                            inline=False,
+                        )
                     else:
                         # Fallback if submitter not found
-                        point_log_msg += f"Host: <@{submission['submitter_id']}> +{points_value}\n"
+                        embed.add_field(
+                            name="Host",
+                            value=f"<@{submission['submitter_id']}> +{points_value}",
+                            inline=False,
+                        )
                     
-                    # Add participants section
+                    # Add participants field
                     if awarded_discord_ids or unlinked_participants:
-                        point_log_msg += "\nParticipants:\n"
+                        participants_list = []
                         
                         # Add linked participants with Discord pings
                         for discord_id in awarded_discord_ids:
                             participant = interaction.guild.get_member(discord_id)
                             if participant:
-                                point_log_msg += f"{participant.mention} +{points_value}\n"
+                                participants_list.append(f"{participant.mention} +{points_value}")
                             else:
                                 # Fallback if participant not found
-                                point_log_msg += f"<@{discord_id}> +{points_value}\n"
+                                participants_list.append(f"<@{discord_id}> +{points_value}")
                         
                         # Add unlinked participants with Roblox username
                         for username in unlinked_participants:
-                            point_log_msg += f"{username} +{points_value}\n"
+                            participants_list.append(f"{username} +{points_value}")
+                        
+                        # Join all participants with newlines
+                        participants_text = "\n".join(participants_list)
+                        embed.add_field(
+                            name="Participants",
+                            value=participants_text,
+                            inline=False,
+                        )
                     
-                    await point_log_channel.send(point_log_msg)
+                    await point_log_channel.send(embed=embed)
         except Exception as e:
             # Do not break approval flow if point logging fails
             logger.error(f"Failed to send point log message: {e}")
