@@ -1688,6 +1688,173 @@ class AdminCommands(commands.Cog):
             logger.error(f"Error setting Discord log level: {e}")
             await interaction.followup.send(f"❌ Error setting log level: {str(e)}", ephemeral=True)
 
+    @app_commands.command(
+        name="test-roblox-api",
+        description="[ADMIN] Test the Roblox API connection and verify API key validity",
+    )
+    @is_admin()
+    async def test_roblox_api(self, interaction: discord.Interaction):
+        """Test the Roblox API connection and verify API key is valid."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for test-roblox-api command - user: {interaction.user.name}"
+                )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in test-roblox-api: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in test-roblox-api command")
+            return
+
+        # Run the API connection test
+        test_results = await roblox_api.test_roblox_connection()
+
+        # Create embed with test results
+        embed = discord.Embed(
+            title="🔍 Roblox API Connection Test",
+            description="Results of testing the Roblox API connection and authentication",
+            color=discord.Color.blue(),
+        )
+
+        # Group Info Status
+        if test_results.get("group_info"):
+            group_name = test_results.get("group_name", "Unknown")
+            group_id = test_results.get("group_id", Config.ROBLOX_GROUP_ID)
+            embed.add_field(
+                name="✅ Group Connection",
+                value=f"**{group_name}**\nGroup ID: `{group_id}`",
+                inline=True,
+            )
+        else:
+            embed.add_field(
+                name="❌ Group Connection",
+                value="Failed to connect to group\nCheck `ROBLOX_GROUP_ID` in `.env`",
+                inline=True,
+            )
+
+        # Group Roles Status
+        if test_results.get("group_roles"):
+            role_count = test_results.get("role_count", 0)
+            embed.add_field(
+                name="✅ Group Roles",
+                value=f"Retrieved **{role_count}** roles",
+                inline=True,
+            )
+        else:
+            embed.add_field(
+                name="❌ Group Roles",
+                value="Failed to retrieve roles",
+                inline=True,
+            )
+
+        # Authentication Method
+        auth_method = test_results.get("auth_method", "None")
+        auth_configured = test_results.get("authentication_configured", False)
+        
+        if auth_method == "API Key":
+            api_key_status = test_results.get("api_key_test_status", "unknown")
+            api_key_valid = test_results.get("api_key_valid", False)
+            
+            if api_key_valid:
+                embed.add_field(
+                    name="✅ API Key Authentication",
+                    value="**Status:** Valid and working\n**Method:** Open Cloud API Key",
+                    inline=False,
+                )
+            elif api_key_status == "invalid":
+                error_msg = test_results.get("api_key_error", "401 Unauthorized")
+                embed.add_field(
+                    name="❌ API Key Authentication",
+                    value=f"**Status:** Invalid API Key\n**Error:** {error_msg}\n\n"
+                          f"**Fix:** Generate a new API key in [Roblox Creator Hub](https://create.roblox.com/)",
+                    inline=False,
+                )
+                embed.color = discord.Color.red()
+            elif api_key_status == "forbidden":
+                error_msg = test_results.get("api_key_error", "403 Forbidden")
+                embed.add_field(
+                    name="⚠️ API Key Permissions",
+                    value=f"**Status:** API Key lacks permissions\n**Error:** {error_msg}\n\n"
+                          f"**Fix:** Ensure API key has `group:read` and `group.membership:write` scopes",
+                    inline=False,
+                )
+                embed.color = discord.Color.orange()
+            else:
+                error_msg = test_results.get("api_key_error", "Unknown error")
+                embed.add_field(
+                    name="⚠️ API Key Test",
+                    value=f"**Status:** Error testing API key\n**Error:** {error_msg[:200]}",
+                    inline=False,
+                )
+                embed.color = discord.Color.orange()
+        elif auth_method == "Cookie":
+            embed.add_field(
+                name="⚠️ Cookie Authentication",
+                value="**Status:** Cookie configured\n**Note:** API key test not applicable\n**Method:** Cookie-based (legacy)",
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="❌ No Authentication",
+                value="**Status:** No credentials configured\n\n"
+                      "**Fix:** Set either `ROBLOX_API_KEY` or `ROBLOX_COOKIE` in `.env`",
+                inline=False,
+            )
+            embed.color = discord.Color.red()
+
+        # Configuration Info
+        config_info = f"**Group ID:** `{Config.ROBLOX_GROUP_ID}`\n"
+        
+        if Config.ROBLOX_API_KEY:
+            # Show partial API key for verification (first 8 chars + ...)
+            api_key_preview = Config.ROBLOX_API_KEY[:8] + "..." if len(Config.ROBLOX_API_KEY) > 8 else "***"
+            config_info += f"**API Key:** `{api_key_preview}`\n"
+        elif Config.ROBLOX_COOKIE:
+            cookie_preview = Config.ROBLOX_COOKIE[:8] + "..." if len(Config.ROBLOX_COOKIE) > 8 else "***"
+            config_info += f"**Cookie:** `{cookie_preview}` (configured)\n"
+        else:
+            config_info += "**API Key:** Not set\n"
+            config_info += "**Cookie:** Not set\n"
+        
+        embed.add_field(name="⚙️ Configuration", value=config_info, inline=False)
+
+        # Errors Section
+        errors = test_results.get("errors", [])
+        if errors:
+            errors_text = "\n".join(f"• {error}" for error in errors[:5])
+            if len(errors) > 5:
+                errors_text += f"\n... and {len(errors) - 5} more"
+            embed.add_field(name="⚠️ Errors", value=errors_text, inline=False)
+
+        # Overall Status
+        all_good = (
+            test_results.get("group_info", False)
+            and test_results.get("group_roles", False)
+            and test_results.get("authentication_configured", False)
+            and (test_results.get("api_key_valid", False) or auth_method == "Cookie")
+            and len(errors) == 0
+        )
+
+        if all_good:
+            embed.color = discord.Color.green()
+            embed.set_footer(text="✅ All tests passed! Roblox API is working correctly.")
+        else:
+            embed.set_footer(
+                text="⚠️ Some tests failed. Check the errors above and verify your configuration."
+            )
+
+        try:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error sending test-roblox-api response: {e}")
+            await interaction.followup.send(
+                f"❌ Error displaying test results: {str(e)}", ephemeral=True
+            )
+
     async def _get_all_discord_members(self) -> List[Dict[str, Any]]:
         """Get all members from database. Helper function for bulk operations."""
         async with database.aiosqlite.connect(database.DATABASE_PATH) as db:

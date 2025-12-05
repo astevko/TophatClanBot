@@ -225,30 +225,93 @@ async def get_group_roles() -> Optional[list]:
 
 async def test_roblox_connection() -> Dict[str, Any]:
     """Test the Roblox API connection and permissions."""
-    results = {"group_info": False, "group_roles": False, "authentication": False, "errors": []}
+    results = {
+        "group_info": False,
+        "group_roles": False,
+        "authentication_configured": False,
+        "api_key_valid": False,
+        "api_key_test_status": None,
+        "api_key_error": None,
+        "auth_method": None,
+        "errors": [],
+    }
 
-    # Test getting group info
+    # Test getting group info (doesn't require auth)
     group_info = await get_group_info()
     if group_info:
         results["group_info"] = True
+        results["group_name"] = group_info.get("name", "Unknown")
+        results["group_id"] = group_info.get("id")
         logger.info(f"Successfully connected to group: {group_info['name']}")
     else:
-        results["errors"].append("Failed to get group info")
+        results["errors"].append("Failed to get group info - check ROBLOX_GROUP_ID")
 
-    # Test getting group roles
+    # Test getting group roles (doesn't require auth)
     roles = await get_group_roles()
     if roles:
         results["group_roles"] = True
+        results["role_count"] = len(roles)
         logger.info(f"Successfully retrieved {len(roles)} group roles")
     else:
         results["errors"].append("Failed to get group roles")
 
-    # Test authentication (check if credentials are configured)
-    if Config.ROBLOX_API_KEY or Config.ROBLOX_COOKIE:
-        results["authentication"] = True
-        logger.info("Authentication credentials configured")
+    # Check if authentication credentials are configured
+    if Config.ROBLOX_API_KEY:
+        results["authentication_configured"] = True
+        results["auth_method"] = "API Key"
+        
+        # Test if API key is actually valid by making an authenticated request
+        # We'll try to access a protected endpoint (getting group memberships requires auth)
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": Config.ROBLOX_API_KEY,
+                }
+                # Test with getting group info via authenticated endpoint (Open Cloud API)
+                # This endpoint will return 401 if the API key is invalid
+                url = f"{ROBLOX_API_BASE}/cloud/v2/groups/{Config.ROBLOX_GROUP_ID}"
+                
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        results["api_key_valid"] = True
+                        results["api_key_test_status"] = "valid"
+                        logger.info("✅ API key is valid and authenticated successfully")
+                    elif response.status == 401:
+                        results["api_key_valid"] = False
+                        results["api_key_test_status"] = "invalid"
+                        error_data = await response.text()
+                        results["api_key_error"] = f"401 Unauthorized - Invalid API key"
+                        results["errors"].append("API key authentication failed (401 Unauthorized)")
+                        logger.error(f"❌ API key is invalid: {error_data}")
+                    elif response.status == 403:
+                        results["api_key_valid"] = False
+                        results["api_key_test_status"] = "forbidden"
+                        error_data = await response.text()
+                        results["api_key_error"] = f"403 Forbidden - API key lacks permissions"
+                        results["errors"].append("API key lacks required permissions (403 Forbidden)")
+                        logger.error(f"⚠️ API key lacks permissions: {error_data}")
+                    else:
+                        results["api_key_valid"] = False
+                        results["api_key_test_status"] = f"error_{response.status}"
+                        error_data = await response.text()
+                        results["api_key_error"] = f"HTTP {response.status}: {error_data[:200]}"
+                        results["errors"].append(f"API key test returned status {response.status}")
+                        logger.warning(f"API key test returned status {response.status}: {error_data[:200]}")
+        except Exception as e:
+            results["api_key_valid"] = False
+            results["api_key_test_status"] = "exception"
+            results["api_key_error"] = str(e)
+            results["errors"].append(f"Exception testing API key: {str(e)}")
+            logger.error(f"Exception testing API key: {e}")
+            
+    elif Config.ROBLOX_COOKIE:
+        results["authentication_configured"] = True
+        results["auth_method"] = "Cookie"
+        results["api_key_test_status"] = "cookie_auth"
+        logger.info("Cookie authentication configured (API key test not applicable)")
     else:
-        results["errors"].append("No authentication credentials configured")
+        results["errors"].append("No authentication credentials configured (ROBLOX_API_KEY or ROBLOX_COOKIE)")
 
     return results
 
