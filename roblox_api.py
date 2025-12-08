@@ -105,6 +105,14 @@ async def update_member_rank(username: str, new_rank_id: int) -> bool:
     and valid authentication credentials (API key or cookie).
     """
     try:
+        # Validate that the role exists before attempting to update
+        if not await validate_role_exists(new_rank_id):
+            logger.error(
+                f"Cannot update rank for {username}: "
+                f"Role ID {new_rank_id} does not exist in the Roblox group"
+            )
+            return False
+        
         user_id = await get_user_id_from_username(username)
         if not user_id:
             logger.error(f"Could not find user ID for {username}")
@@ -221,6 +229,37 @@ async def get_group_roles() -> Optional[list]:
     except Exception as e:
         logger.error(f"Error getting group roles: {e}")
         return None
+
+
+async def validate_role_exists(role_id: int) -> bool:
+    """
+    Validate that a role ID exists in the Roblox group.
+    
+    Args:
+        role_id: The role ID to validate
+        
+    Returns:
+        True if the role exists, False if it doesn't exist or can't be validated
+    """
+    try:
+        roles = await get_group_roles()
+        if roles is None:
+            logger.warning(f"Could not fetch group roles to validate role ID {role_id}")
+            return False
+        
+        # Check if the role ID exists in the list of roles
+        role_ids = [role["id"] for role in roles]
+        if role_id not in role_ids:
+            logger.error(
+                f"Role ID {role_id} does not exist in the group. "
+                f"Available role IDs: {role_ids}"
+            )
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error validating role ID {role_id}: {e}")
+        return False
 
 
 async def test_roblox_connection() -> Dict[str, Any]:
