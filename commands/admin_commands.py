@@ -1277,7 +1277,6 @@ class AdminCommands(commands.Cog):
             logger.error(f"Error sending compare-ranks response: {e}")
 
     @app_commands.command(name="rank-requirements", description="[Personnel+] View all rank requirements")
-    @is_admin()
     async def list_ranks(self, interaction: discord.Interaction):
         """List all ranks and their requirements."""
         if not interaction.response.is_done():
