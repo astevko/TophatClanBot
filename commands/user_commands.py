@@ -397,12 +397,12 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
     """Modal for inputting points to award."""
 
     points = discord.ui.TextInput(
-        label="Points to Award (1-8)",
-        placeholder="Enter a number between 1 and 8",
+        label="Points to Award (1-30)",
+        placeholder="Enter a number between 1 and 30",
         style=discord.TextStyle.short,
         required=True,
         min_length=1,
-        max_length=1,
+        max_length=2,
     )
 
     def __init__(self, submission_id: int, approval_interaction: discord.Interaction):
@@ -417,14 +417,14 @@ class PointsInputModal(discord.ui.Modal, title="Award Points"):
         # Validate points
         try:
             points_value = int(self.points.value)
-            if points_value < 1 or points_value > 8:
+            if points_value < 1 or points_value > 30:
                 await interaction.followup.send(
-                    "❌ Points must be between 1 and 8.", ephemeral=True
+                    "❌ Points must be between 1 and 30.", ephemeral=True
                 )
                 return
         except ValueError:
             await interaction.followup.send(
-                "❌ Invalid points value. Please enter a number between 1 and 8.", ephemeral=True
+                "❌ Invalid points value. Please enter a number between 1 and 30.", ephemeral=True
             )
             return
 

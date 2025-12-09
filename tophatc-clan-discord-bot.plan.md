@@ -38,7 +38,7 @@ Military hierarchy with point thresholds:
 
 **Admin Approval Flow**:
 
-- Admin clicks [Approve] → Modal asks for points (1-8)
+- Admin clicks [Approve] → Modal asks for points (1-30)
 - Bot awards points to all participants
 - Updates database and notifies participants
 - Admin clicks [Decline] → Submission rejected, submitter notified
@@ -119,7 +119,7 @@ TophatClanBot/
 
 - Admin-only commands restricted by Discord role/permissions
 - Environment variables for sensitive tokens
-- Input validation on point values (1-8) and user mentions
+- Input validation on point values (1-30) and user mentions
 
 ### To-dos
 

@@ -786,7 +786,7 @@ This change is immediate. All logs still go to bot.log file.
 ```
 1. Check #raid-approvals channel
 2. Click [Approve] button
-3. Enter points (1-8)
+3. Enter points (1-30)
 4. Points automatically distributed
 ```
 

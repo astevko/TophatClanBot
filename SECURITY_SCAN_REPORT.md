@@ -27,7 +27,7 @@
 - ✅ Configuration validation before bot starts
 
 ### 4. **Input Validation**
-- ✅ Points validation (1-8 range) in raid submissions
+- ✅ Points validation (1-30 range) in raid submissions
 - ✅ Image attachment validation for raid proofs
 - ✅ Discord ID type checking
 - ✅ Length limits on text inputs (max_length parameters)

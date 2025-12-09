@@ -309,7 +309,7 @@ See `.github/workflows/docker-build.yml` for CI/CD configuration.
 1. **Review Submissions**
    - Check admin channel for raid submissions
    - Click "Approve" or "Decline"
-   - If approving, enter points (1-8)
+   - If approving, enter points (1-30)
 
 2. **Manage Members**
    - Use `/check-member @user` to see stats
