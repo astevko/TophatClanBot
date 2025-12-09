@@ -100,16 +100,46 @@ async def get_member_rank(username: str) -> Optional[Dict[str, Any]]:
 async def update_member_rank(username: str, new_rank_id: int) -> bool:
     """
     Update a member's rank in the Roblox group.
+    
+    The new_rank_id parameter can be either:
+    - A Roblox role ID (large number, e.g., 50689939)
+    - A Roblox rank number (0-255, e.g., 47)
+    
+    If a rank number is provided, it will be automatically converted to the role ID.
 
     Note: This requires the bot to have proper permissions in the Roblox group
     and valid authentication credentials (API key or cookie).
     """
     try:
+        # Check if new_rank_id is a rank number (0-255) or a role ID
+        # Rank numbers are small, role IDs are large numbers
+        actual_role_id = new_rank_id
+        
+        # If it's a small number (likely a rank number), try to convert it
+        if new_rank_id <= 255:
+            converted_role_id = await get_role_id_from_rank_number(new_rank_id)
+            if converted_role_id:
+                actual_role_id = converted_role_id
+                logger.info(
+                    f"Converted rank number {new_rank_id} to role ID {actual_role_id} for {username}"
+                )
+            else:
+                # It might still be a valid role ID that happens to be small
+                # Let validation check if it exists
+                pass
+        
         # Validate that the role exists before attempting to update
-        if not await validate_role_exists(new_rank_id):
+        roles = await get_group_roles()
+        if roles is None:
+            logger.error(f"Could not fetch group roles to validate rank update for {username}")
+            return False
+        
+        role_ids = [role["id"] for role in roles]
+        if actual_role_id not in role_ids:
             logger.error(
                 f"Cannot update rank for {username}: "
-                f"Role ID {new_rank_id} does not exist in the Roblox group"
+                f"Role ID {actual_role_id} (from input {new_rank_id}) does not exist in the Roblox group. "
+                f"Available role IDs: {role_ids}"
             )
             return False
         
@@ -131,13 +161,13 @@ async def update_member_rank(username: str, new_rank_id: int) -> bool:
                 url = f"{ROBLOX_API_BASE}/cloud/v2/groups/{Config.ROBLOX_GROUP_ID}/memberships/{user_id}"
 
                 # Roblox Open Cloud API expects role as a full resource path
-                role_path = f"groups/{Config.ROBLOX_GROUP_ID}/roles/{new_rank_id}"
+                role_path = f"groups/{Config.ROBLOX_GROUP_ID}/roles/{actual_role_id}"
 
                 async with session.patch(
                     url, headers=headers, json={"role": role_path}
                 ) as response:
                     if response.status in [200, 204]:
-                        logger.info(f"Successfully updated rank for {username} to {new_rank_id}")
+                        logger.info(f"Successfully updated rank for {username} to role ID {actual_role_id} (from input {new_rank_id})")
                         return True
                     else:
                         error_text = await response.text()
@@ -161,10 +191,10 @@ async def update_member_rank(username: str, new_rank_id: int) -> bool:
                 # Update the rank
                 url = f"{ROBLOX_GROUPS_API}/groups/{Config.ROBLOX_GROUP_ID}/users/{user_id}"
                 async with session.patch(
-                    url, headers=headers, json={"roleId": new_rank_id}
+                    url, headers=headers, json={"roleId": actual_role_id}
                 ) as response:
                     if response.status in [200, 204]:
-                        logger.info(f"Successfully updated rank for {username} to {new_rank_id}")
+                        logger.info(f"Successfully updated rank for {username} to role ID {actual_role_id} (from input {new_rank_id})")
                         return True
                     else:
                         error_text = await response.text()
@@ -231,12 +261,39 @@ async def get_group_roles() -> Optional[list]:
         return None
 
 
+async def get_role_id_from_rank_number(rank_number: int) -> Optional[int]:
+    """
+    Convert a Roblox rank number (0-255) to the corresponding role ID.
+    
+    Args:
+        rank_number: The rank number (0-255)
+        
+    Returns:
+        The role ID if found, None otherwise
+    """
+    try:
+        roles = await get_group_roles()
+        if roles is None:
+            return None
+        
+        # Find the role with matching rank number
+        for role in roles:
+            if role["rank"] == rank_number:
+                return role["id"]
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error converting rank number {rank_number} to role ID: {e}")
+        return None
+
+
 async def validate_role_exists(role_id: int) -> bool:
     """
     Validate that a role ID exists in the Roblox group.
+    Also checks if the provided value is a rank number (0-255) and converts it.
     
     Args:
-        role_id: The role ID to validate
+        role_id: The role ID to validate, or a rank number (0-255)
         
     Returns:
         True if the role exists, False if it doesn't exist or can't be validated
@@ -249,14 +306,26 @@ async def validate_role_exists(role_id: int) -> bool:
         
         # Check if the role ID exists in the list of roles
         role_ids = [role["id"] for role in roles]
-        if role_id not in role_ids:
-            logger.error(
-                f"Role ID {role_id} does not exist in the group. "
-                f"Available role IDs: {role_ids}"
-            )
-            return False
+        if role_id in role_ids:
+            return True
         
-        return True
+        # If not found as a role ID, check if it's a rank number (0-255)
+        # Rank numbers are typically small (0-255), while role IDs are large numbers
+        if role_id <= 255:
+            rank_numbers = [role["rank"] for role in roles]
+            if role_id in rank_numbers:
+                # It's a valid rank number, but we need the actual role ID
+                logger.warning(
+                    f"Provided value {role_id} is a rank number, not a role ID. "
+                    f"Use get_role_id_from_rank_number() to convert it first."
+                )
+                return False
+        
+        logger.error(
+            f"Role ID {role_id} does not exist in the group. "
+            f"Available role IDs: {role_ids}"
+        )
+        return False
     except Exception as e:
         logger.error(f"Error validating role ID {role_id}: {e}")
         return False
