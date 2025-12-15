@@ -509,6 +509,31 @@ class AdminCommands(commands.Cog):
         # Update points
         await database.add_points(member.id, points)
 
+        # Log to admin channel
+        try:
+            admin_channel_id = await database.get_config("admin_channel_id")
+            if not admin_channel_id:
+                admin_channel_id = Config.ADMIN_CHANNEL_ID
+
+            if admin_channel_id:
+                admin_channel = interaction.guild.get_channel(int(admin_channel_id))
+                if admin_channel:
+                    log_embed = discord.Embed(
+                        title="📊 Points Added",
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow(),
+                    )
+                    log_embed.add_field(name="Recipient", value=f"{member.mention} ({member.display_name})", inline=True)
+                    log_embed.add_field(name="Awarded By", value=f"{interaction.user.mention} ({interaction.user.display_name})", inline=True)
+                    log_embed.add_field(name="Points", value=f"+{points}", inline=True)
+                    log_embed.add_field(name="Previous Points", value=str(member_data["points"]), inline=True)
+                    log_embed.add_field(name="New Points", value=str(new_points), inline=True)
+                    
+                    await admin_channel.send(embed=log_embed)
+        except Exception as e:
+            # Don't fail the command if logging fails
+            logger.error(f"Failed to send points-add log to admin channel: {e}")
+
         # Notify member
         dm_sent = False
         try:
@@ -678,6 +703,31 @@ class AdminCommands(commands.Cog):
 
         # Update points (use negative value)
         await database.add_points(member.id, -points)
+
+        # Log to admin channel
+        try:
+            admin_channel_id = await database.get_config("admin_channel_id")
+            if not admin_channel_id:
+                admin_channel_id = Config.ADMIN_CHANNEL_ID
+
+            if admin_channel_id:
+                admin_channel = interaction.guild.get_channel(int(admin_channel_id))
+                if admin_channel:
+                    log_embed = discord.Embed(
+                        title="📊 Points Removed",
+                        color=discord.Color.orange(),
+                        timestamp=discord.utils.utcnow(),
+                    )
+                    log_embed.add_field(name="Recipient", value=f"{member.mention} ({member.display_name})", inline=True)
+                    log_embed.add_field(name="Removed By", value=f"{interaction.user.mention} ({interaction.user.display_name})", inline=True)
+                    log_embed.add_field(name="Points", value=f"-{points}", inline=True)
+                    log_embed.add_field(name="Previous Points", value=str(member_data["points"]), inline=True)
+                    log_embed.add_field(name="New Points", value=str(new_points), inline=True)
+                    
+                    await admin_channel.send(embed=log_embed)
+        except Exception as e:
+            # Don't fail the command if logging fails
+            logger.error(f"Failed to send points-remove log to admin channel: {e}")
 
         # Notify member
         dm_sent = False
