@@ -431,17 +431,17 @@ class AdminCommands(commands.Cog):
         # )
 
     @app_commands.command(
-        name="points-add", description="[Officer+] Manually add or remove points from a member"
+        name="points-add", description="[Officer+] Manually add points to a member"
     )
     @app_commands.describe(
-        member="The member to adjust points for",
-        points="Points to add (positive) or remove (negative)",
+        member="The member to add points to",
+        points="Number of points to add (1-10)",
     )
     @is_admin()
     async def add_points(
         self, interaction: discord.Interaction, member: discord.Member, points: int
     ):
-        """Add or remove points from a member."""
+        """Add points to a member."""
         if not interaction.response.is_done():
             try:
                 await interaction.response.defer(ephemeral=True)
@@ -461,6 +461,21 @@ class AdminCommands(commands.Cog):
                 return
         else:
             logger.warning("Interaction already responded to in add-points command")
+            return
+
+        # Validate positive number
+        if points <= 0:
+            await interaction.followup.send(
+                "❌ Please enter a positive number of points to add.", ephemeral=True
+            )
+            return
+
+        # Validate points amount (cap at 10)
+        if points > 10:
+            await interaction.followup.send(
+                f"❌ Cannot add more than 10 points at once. You requested {points} points.",
+                ephemeral=True,
+            )
             return
 
         # Check if user is trying to add points to themselves
@@ -621,6 +636,14 @@ class AdminCommands(commands.Cog):
         if points <= 0:
             await interaction.followup.send(
                 "❌ Please enter a positive number of points to remove.", ephemeral=True
+            )
+            return
+
+        # Validate points amount (cap at 10)
+        if points > 10:
+            await interaction.followup.send(
+                f"❌ Cannot remove more than 10 points at once. You requested {points} points.",
+                ephemeral=True,
             )
             return
 
