@@ -381,7 +381,9 @@ class AdminCommands(commands.Cog):
 
         embed.add_field(name="Previous Rank", value=old_rank["rank_name"], inline=True)
         embed.add_field(name="New Rank", value=next_rank["rank_name"], inline=True)
-        embed.add_field(name="Total Points", value=str(member_data["points"]), inline=True)
+        # Show lifetime total points (points reset to 0 on promotion)
+        total_points = member_data.get("total_points", member_data.get("points", 0))
+        embed.add_field(name="Total Points (Lifetime)", value=str(total_points), inline=True)
 
         # Show rank type
         if is_admin_only:
@@ -983,7 +985,12 @@ class AdminCommands(commands.Cog):
         )
 
         embed.add_field(name="Current Rank", value=member_data["rank_name"], inline=True)
-        embed.add_field(name="Total Points", value=str(member_data["points"]), inline=True)
+        
+        # Show both current points (for promotion) and total points (lifetime)
+        current_points = member_data.get("points", 0)
+        total_points = member_data.get("total_points", current_points)
+        embed.add_field(name="Current Points", value=str(current_points), inline=True)
+        embed.add_field(name="Total Points (Lifetime)", value=str(total_points), inline=True)
 
         # Show rank type
         rank_type = "⚡ Admin-Only" if is_current_admin_only else "📊 Point-Based"
@@ -1007,7 +1014,7 @@ class AdminCommands(commands.Cog):
             )
             embed.add_field(
                 name="Auto-Promotion Status",
-                value=f"{eligible}\n({member_data['points']}/{next_point_rank['points_required']} points)",
+                value=f"{eligible}\n({current_points}/{next_point_rank['points_required']} points)",
                 inline=False,
             )
         else:

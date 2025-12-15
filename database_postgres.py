@@ -33,9 +33,24 @@ async def init_database():
                 roblox_username TEXT UNIQUE,
                 current_rank INTEGER DEFAULT 1,
                 points INTEGER DEFAULT 0,
+                total_points INTEGER DEFAULT 0,
                 created_at TIMESTAMP NOT NULL
             )
         """)
+        
+        # Migration: Add total_points column if it doesn't exist (for existing databases)
+        try:
+            await conn.execute("""
+                ALTER TABLE members ADD COLUMN IF NOT EXISTS total_points INTEGER DEFAULT 0
+            """)
+            # Set total_points = points for existing members
+            await conn.execute("""
+                UPDATE members SET total_points = points WHERE total_points = 0
+            """)
+            logger.info("Migrated existing members: set total_points = points")
+        except Exception as e:
+            # Column might already exist, skip migration
+            logger.debug(f"Migration check: {e}")
 
         # Raid submissions table
         await conn.execute("""
@@ -172,8 +187,8 @@ async def create_member(discord_id: int, roblox_username: str) -> bool:
         async with pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO members (discord_id, roblox_username, current_rank, points, created_at)
-                VALUES ($1, $2, 1, 0, $3)
+                INSERT INTO members (discord_id, roblox_username, current_rank, points, total_points, created_at)
+                VALUES ($1, $2, 1, 0, 0, $3)
             """,
                 discord_id,
                 roblox_username,
@@ -210,7 +225,7 @@ async def add_points(discord_id: int, points: int) -> bool:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE members SET points = points + $1 WHERE discord_id = $2
+            UPDATE members SET points = points + $1, total_points = total_points + $1 WHERE discord_id = $2
         """,
             points,
             discord_id,
@@ -252,17 +267,17 @@ async def check_promotion_eligibility(discord_id: int) -> Optional[Dict[str, Any
 
 
 async def set_member_rank(discord_id: int, rank_order: int) -> bool:
-    """Set a member's rank."""
+    """Set a member's rank. Resets points to 0 on promotion."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE members SET current_rank = $1 WHERE discord_id = $2
+            UPDATE members SET current_rank = $1, points = 0 WHERE discord_id = $2
         """,
             rank_order,
             discord_id,
         )
-        logger.info(f"Updated rank for member {discord_id} to {rank_order}")
+        logger.info(f"Updated rank for member {discord_id} to {rank_order} (points reset to 0)")
         return True
 
 
@@ -277,15 +292,15 @@ async def get_all_members() -> List[Dict[str, Any]]:
 
 
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get top members by points."""
+    """Get top members by total points (lifetime points)."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT m.discord_id, m.roblox_username, m.points, r.rank_name
+            SELECT m.discord_id, m.roblox_username, m.total_points AS points, r.rank_name
             FROM members m
             JOIN rank_requirements r ON m.current_rank = r.rank_order
-            ORDER BY m.points DESC
+            ORDER BY m.total_points DESC
             LIMIT $1
         """,
             limit,

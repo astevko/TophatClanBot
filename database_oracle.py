@@ -82,6 +82,7 @@ async def init_database():
                     roblox_username VARCHAR2(100) UNIQUE,
                     current_rank NUMBER(10) DEFAULT 1,
                     points NUMBER(10) DEFAULT 0,
+                    total_points NUMBER(10) DEFAULT 0,
                     created_at TIMESTAMP NOT NULL
                 )
             """)
@@ -90,6 +91,32 @@ async def init_database():
             error_obj, = e.args
             if error_obj.code == 955:  # Table already exists
                 logger.info("Members table already exists")
+                
+                # Migration: Add total_points column if it doesn't exist
+                try:
+                    cursor.execute("""
+                        SELECT COUNT(*) 
+                        FROM user_tab_columns 
+                        WHERE table_name = 'MEMBERS' 
+                        AND column_name = 'TOTAL_POINTS'
+                    """)
+                    total_points_exists = cursor.fetchone()[0] > 0
+                    
+                    if not total_points_exists:
+                        logger.info("Adding total_points column to existing members table")
+                        cursor.execute("""
+                            ALTER TABLE members 
+                            ADD total_points NUMBER(10) DEFAULT 0
+                        """)
+                        # Set total_points = points for existing members
+                        cursor.execute("""
+                            UPDATE members SET total_points = points WHERE total_points = 0
+                        """)
+                        connection.commit()
+                        logger.info("Migrated existing members: set total_points = points")
+                except oracledb.DatabaseError as e2:
+                    error_obj2, = e2.args
+                    logger.warning(f"Could not check/add total_points column: {error_obj2.message}")
             else:
                 raise
 
@@ -304,8 +331,8 @@ async def create_member(discord_id: int, roblox_username: str) -> bool:
             cursor = connection.cursor()
             cursor.execute(
                 """
-                INSERT INTO members (discord_id, roblox_username, current_rank, points, created_at)
-                VALUES (:1, :2, 1, 0, :3)
+                INSERT INTO members (discord_id, roblox_username, current_rank, points, total_points, created_at)
+                VALUES (:1, :2, 1, 0, 0, :3)
                 """,
                 [discord_id, roblox_username.strip(), datetime.utcnow()],
             )
@@ -352,7 +379,7 @@ async def add_points(discord_id: int, points: int) -> bool:
         cursor = connection.cursor()
         cursor.execute(
             """
-            UPDATE members SET points = points + :1 WHERE discord_id = :2
+            UPDATE members SET points = points + :1, total_points = total_points + :1 WHERE discord_id = :2
             """,
             [points, discord_id],
         )
@@ -396,7 +423,7 @@ async def check_promotion_eligibility(discord_id: int) -> Optional[Dict[str, Any
 
 
 async def set_member_rank(discord_id: int, rank_order: int) -> bool:
-    """Set a member's rank."""
+    """Set a member's rank. Resets points to 0 on promotion."""
     pool = await get_pool()
     connection = pool.acquire()
 
@@ -404,12 +431,12 @@ async def set_member_rank(discord_id: int, rank_order: int) -> bool:
         cursor = connection.cursor()
         cursor.execute(
             """
-            UPDATE members SET current_rank = :1 WHERE discord_id = :2
+            UPDATE members SET current_rank = :1, points = 0 WHERE discord_id = :2
             """,
             [rank_order, discord_id],
         )
         connection.commit()
-        logger.info(f"Updated rank for member {discord_id} to {rank_order}")
+        logger.info(f"Updated rank for member {discord_id} to {rank_order} (points reset to 0)")
         return True
     finally:
         pool.release(connection)
@@ -432,7 +459,7 @@ async def get_all_members() -> List[Dict[str, Any]]:
 
 
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get top members by points."""
+    """Get top members by total points (lifetime points)."""
     pool = await get_pool()
     connection = pool.acquire()
     
@@ -440,10 +467,10 @@ async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
         cursor = connection.cursor()
         cursor.execute(
             """
-            SELECT m.discord_id, m.roblox_username, m.points, r.rank_name
+            SELECT m.discord_id, m.roblox_username, m.total_points AS points, r.rank_name
             FROM members m
             JOIN rank_requirements r ON m.current_rank = r.rank_order
-            ORDER BY m.points DESC
+            ORDER BY m.total_points DESC
             FETCH FIRST :1 ROWS ONLY
             """,
             [limit],

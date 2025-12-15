@@ -24,10 +24,26 @@ async def init_database():
                 roblox_username TEXT UNIQUE,
                 current_rank INTEGER DEFAULT 1,
                 points INTEGER DEFAULT 0,
+                total_points INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (current_rank) REFERENCES rank_requirements(rank_order)
             )
         """)
+        
+        # Migration: Add total_points column if it doesn't exist (for existing databases)
+        try:
+            await db.execute("""
+                ALTER TABLE members ADD COLUMN total_points INTEGER DEFAULT 0
+            """)
+            # Set total_points = points for existing members
+            await db.execute("""
+                UPDATE members SET total_points = points WHERE total_points = 0
+            """)
+            await db.commit()
+            logger.info("Migrated existing members: set total_points = points")
+        except aiosqlite.OperationalError:
+            # Column already exists, skip migration
+            pass
 
         # Raid submissions table
         await db.execute("""
@@ -95,7 +111,7 @@ async def insert_default_ranks(db):
         (12, "Veteran TC", 0, 118, True),
         (13, "Queen TC", 0, 119, True),
         # Admin-Only Ranks - Leadership
-        (17, "C3 | General", 0, 129, True),
+        (17, "C3 | General", 0, 125, True),
         (18, "C4 | Conquistador", 0, 130, True),
         (19, "C5 | Chief Conquistador", 0, 149, True),
         (20, "Commander", 0, 150, True),
@@ -165,8 +181,8 @@ async def create_member(discord_id: int, roblox_username: str) -> bool:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute(
                 """
-                INSERT INTO members (discord_id, roblox_username, current_rank, points, created_at)
-                VALUES (?, ?, 1, 0, ?)
+                INSERT INTO members (discord_id, roblox_username, current_rank, points, total_points, created_at)
+                VALUES (?, ?, 1, 0, 0, ?)
             """,
                 (discord_id, roblox_username, datetime.utcnow().isoformat()),
             )
@@ -200,9 +216,9 @@ async def add_points(discord_id: int, points: int) -> bool:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
             """
-            UPDATE members SET points = points + ? WHERE discord_id = ?
+            UPDATE members SET points = points + ?, total_points = total_points + ? WHERE discord_id = ?
         """,
-            (points, discord_id),
+            (points, points, discord_id),
         )
         await db.commit()
         logger.info(f"Added {points} points to member {discord_id}")
@@ -242,16 +258,16 @@ async def check_promotion_eligibility(discord_id: int) -> Optional[Dict[str, Any
 
 
 async def set_member_rank(discord_id: int, rank_order: int) -> bool:
-    """Set a member's rank."""
+    """Set a member's rank. Resets points to 0 on promotion."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
             """
-            UPDATE members SET current_rank = ? WHERE discord_id = ?
+            UPDATE members SET current_rank = ?, points = 0 WHERE discord_id = ?
         """,
             (rank_order, discord_id),
         )
         await db.commit()
-        logger.info(f"Updated rank for member {discord_id} to {rank_order}")
+        logger.info(f"Updated rank for member {discord_id} to {rank_order} (points reset to 0)")
         return True
 
 
@@ -267,15 +283,15 @@ async def get_all_members() -> List[Dict[str, Any]]:
 
 
 async def get_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get top members by points."""
+    """Get top members by total points (lifetime points)."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             """
-            SELECT m.discord_id, m.roblox_username, m.points, r.rank_name
+            SELECT m.discord_id, m.roblox_username, m.total_points AS points, r.rank_name
             FROM members m
             JOIN rank_requirements r ON m.current_rank = r.rank_order
-            ORDER BY m.points DESC
+            ORDER BY m.total_points DESC
             LIMIT ?
         """,
             (limit,),
