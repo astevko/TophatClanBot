@@ -225,8 +225,9 @@ async def add_points(discord_id: int, points: int) -> bool:
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            UPDATE members SET points = points + $1, total_points = total_points + $1 WHERE discord_id = $2
+            UPDATE members SET points = points + $1, total_points = total_points + $2 WHERE discord_id = $3
         """,
+            points,
             points,
             discord_id,
         )

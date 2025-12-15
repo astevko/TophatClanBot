@@ -379,9 +379,9 @@ async def add_points(discord_id: int, points: int) -> bool:
         cursor = connection.cursor()
         cursor.execute(
             """
-            UPDATE members SET points = points + :1, total_points = total_points + :1 WHERE discord_id = :2
+            UPDATE members SET points = points + :1, total_points = total_points + :2 WHERE discord_id = :3
             """,
-            [points, discord_id],
+            [points, points, discord_id],
         )
         connection.commit()
         logger.info(f"Added {points} points to member {discord_id}")
