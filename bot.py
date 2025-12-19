@@ -239,8 +239,13 @@ class TophatClanBot(commands.Bot):
 
         # Add global check for blacklist
         async def blacklist_check(interaction: discord.Interaction) -> bool:
-            """Global check for blacklist on all commands."""
+            """Global check for blacklist on all commands.
+            
+            Note: Blacklist management commands (blacklist-add, blacklist-remove, blacklist-view)
+            are NOT exempted and will also be blocked for blacklisted users.
+            """
             # Commands that bypass blacklist check
+            # Note: blacklist commands are intentionally NOT in this list
             EXEMPTED_COMMANDS = ["xp", "link-roblox", "show-my-id", "leaderboard"]
             
             command_name = interaction.command.name if interaction.command else None
@@ -249,7 +254,7 @@ class TophatClanBot(commands.Bot):
             if command_name in EXEMPTED_COMMANDS:
                 return True
             
-            # Check if user is blacklisted
+            # Check if user is blacklisted (this applies to ALL other commands, including blacklist management commands)
             is_blocked = await database.is_blacklisted(interaction.user.id)
             if is_blocked:
                 try:
