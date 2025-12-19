@@ -202,6 +202,24 @@ async def init_database():
             else:
                 raise
 
+        # Blacklist table for blocking users from commands
+        try:
+            cursor.execute("""
+                CREATE TABLE blacklist (
+                    discord_id NUMBER(20) PRIMARY KEY,
+                    reason VARCHAR2(1000),
+                    blacklisted_at TIMESTAMP NOT NULL,
+                    blacklisted_by NUMBER(20)
+                )
+            """)
+            logger.info("Created blacklist table")
+        except oracledb.DatabaseError as e:
+            error_obj, = e.args
+            if error_obj.code == 955:  # Table already exists
+                logger.info("Blacklist table already exists")
+            else:
+                raise
+
         connection.commit()
         logger.info("Oracle database initialized successfully")
 
@@ -738,6 +756,95 @@ async def set_config(key: str, value: str) -> bool:
         connection.commit()
         logger.info(f"Set config {key} = {value}")
         return True
+    finally:
+        pool.release(connection)
+
+
+# ============= BLACKLIST OPERATIONS =============
+
+
+async def is_blacklisted(discord_id: int) -> bool:
+    """Check if a user is blacklisted."""
+    pool = await get_pool()
+    connection = pool.acquire()
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT discord_id FROM blacklist WHERE discord_id = :1
+            """,
+            [discord_id],
+        )
+        row = cursor.fetchone()
+        return row is not None
+    finally:
+        pool.release(connection)
+
+
+async def add_to_blacklist(discord_id: int, reason: Optional[str] = None, blacklisted_by: Optional[int] = None) -> bool:
+    """Add a user to the blacklist."""
+    pool = await get_pool()
+    connection = pool.acquire()
+
+    try:
+        cursor = connection.cursor()
+        # Oracle MERGE statement for UPSERT
+        cursor.execute(
+            """
+            MERGE INTO blacklist b
+            USING (SELECT :1 AS discord_id, :2 AS reason, :3 AS blacklisted_at, :4 AS blacklisted_by FROM dual) src
+            ON (b.discord_id = src.discord_id)
+            WHEN MATCHED THEN
+                UPDATE SET b.reason = src.reason, b.blacklisted_at = src.blacklisted_at, b.blacklisted_by = src.blacklisted_by
+            WHEN NOT MATCHED THEN
+                INSERT (discord_id, reason, blacklisted_at, blacklisted_by) VALUES (src.discord_id, src.reason, src.blacklisted_at, src.blacklisted_by)
+            """,
+            [discord_id, reason, datetime.utcnow(), blacklisted_by],
+        )
+        connection.commit()
+        logger.info(f"Added {discord_id} to blacklist (reason: {reason})")
+        return True
+    finally:
+        pool.release(connection)
+
+
+async def remove_from_blacklist(discord_id: int) -> bool:
+    """Remove a user from the blacklist."""
+    pool = await get_pool()
+    connection = pool.acquire()
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            DELETE FROM blacklist WHERE discord_id = :1
+            """,
+            [discord_id],
+        )
+        connection.commit()
+        if cursor.rowcount > 0:
+            logger.info(f"Removed {discord_id} from blacklist")
+            return True
+        return False
+    finally:
+        pool.release(connection)
+
+
+async def get_blacklist() -> List[Dict[str, Any]]:
+    """Get all blacklisted users."""
+    pool = await get_pool()
+    connection = pool.acquire()
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT discord_id, reason, blacklisted_at, blacklisted_by
+            FROM blacklist
+            ORDER BY blacklisted_at DESC
+        """)
+        rows = cursor.fetchall()
+        return [_dict_from_row(cursor, row) for row in rows]
     finally:
         pool.release(connection)
 

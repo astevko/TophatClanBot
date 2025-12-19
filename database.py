@@ -82,6 +82,16 @@ async def init_database():
             )
         """)
 
+        # Blacklist table for blocking users from commands
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS blacklist (
+                discord_id INTEGER PRIMARY KEY,
+                reason TEXT,
+                blacklisted_at TEXT NOT NULL,
+                blacklisted_by INTEGER
+            )
+        """)
+
         await db.commit()
         logger.info("Database initialized successfully")
 
@@ -487,3 +497,65 @@ async def set_config(key: str, value: str) -> bool:
         await db.commit()
         logger.info(f"Set config {key} = {value}")
         return True
+
+
+# ============= BLACKLIST OPERATIONS =============
+
+
+async def is_blacklisted(discord_id: int) -> bool:
+    """Check if a user is blacklisted."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db.execute(
+            """
+            SELECT discord_id FROM blacklist WHERE discord_id = ?
+        """,
+            (discord_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row is not None
+
+
+async def add_to_blacklist(discord_id: int, reason: Optional[str] = None, blacklisted_by: Optional[int] = None) -> bool:
+    """Add a user to the blacklist."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO blacklist (discord_id, reason, blacklisted_at, blacklisted_by)
+            VALUES (?, ?, ?, ?)
+        """,
+            (discord_id, reason, datetime.utcnow().isoformat(), blacklisted_by),
+        )
+        await db.commit()
+        logger.info(f"Added {discord_id} to blacklist (reason: {reason})")
+        return True
+
+
+async def remove_from_blacklist(discord_id: int) -> bool:
+    """Remove a user from the blacklist."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            """
+            DELETE FROM blacklist WHERE discord_id = ?
+        """,
+            (discord_id,),
+        )
+        await db.commit()
+        if cursor.rowcount > 0:
+            logger.info(f"Removed {discord_id} from blacklist")
+            return True
+        return False
+
+
+async def get_blacklist() -> List[Dict[str, Any]]:
+    """Get all blacklisted users."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT discord_id, reason, blacklisted_at, blacklisted_by
+            FROM blacklist
+            ORDER BY blacklisted_at DESC
+        """
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]

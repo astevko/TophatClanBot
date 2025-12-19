@@ -1934,13 +1934,171 @@ class AdminCommands(commands.Cog):
                 f"❌ Error displaying test results: {str(e)}", ephemeral=True
             )
 
+    @app_commands.command(
+        name="blacklist-add",
+        description="[ADMIN] Add a user to the blacklist (blocks them from using commands)"
+    )
+    @app_commands.describe(
+        member="The member to blacklist",
+        reason="Optional reason for blacklisting"
+    )
+    @is_admin()
+    async def blacklist_add(
+        self, interaction: discord.Interaction, member: discord.Member, reason: Optional[str] = None
+    ):
+        """Add a user to the blacklist."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for blacklist-add command - user: {interaction.user.name}"
+                )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in blacklist-add: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in blacklist-add command")
+            return
+
+        # Check if user is trying to blacklist themselves
+        if member.id == interaction.user.id:
+            await interaction.followup.send(
+                "❌ You cannot blacklist yourself!", ephemeral=True
+            )
+            return
+
+        # Add to blacklist
+        success = await database.add_to_blacklist(member.id, reason, interaction.user.id)
+
+        if success:
+            embed = discord.Embed(
+                title="✅ User Blacklisted",
+                description=f"{member.mention} has been added to the blacklist.",
+                color=discord.Color.red(),
+            )
+            embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=True)
+            if reason:
+                embed.add_field(name="Reason", value=reason, inline=False)
+            embed.add_field(name="Blacklisted By", value=interaction.user.mention, inline=True)
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            logger.info(f"{interaction.user.name} blacklisted {member.name} (ID: {member.id})")
+        else:
+            await interaction.followup.send(
+                "❌ Failed to add user to blacklist.", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="blacklist-remove",
+        description="[ADMIN] Remove a user from the blacklist"
+    )
+    @app_commands.describe(member="The member to remove from the blacklist")
+    @is_admin()
+    async def blacklist_remove(self, interaction: discord.Interaction, member: discord.Member):
+        """Remove a user from the blacklist."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for blacklist-remove command - user: {interaction.user.name}"
+                )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in blacklist-remove: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in blacklist-remove command")
+            return
+
+        # Remove from blacklist
+        success = await database.remove_from_blacklist(member.id)
+
+        if success:
+            embed = discord.Embed(
+                title="✅ User Removed from Blacklist",
+                description=f"{member.mention} has been removed from the blacklist.",
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=True)
+            embed.add_field(name="Removed By", value=interaction.user.mention, inline=True)
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            logger.info(f"{interaction.user.name} removed {member.name} (ID: {member.id}) from blacklist")
+        else:
+            await interaction.followup.send(
+                "❌ User is not in the blacklist.", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="blacklist-view",
+        description="[ADMIN] View all blacklisted users"
+    )
+    @is_admin()
+    async def blacklist_view(self, interaction: discord.Interaction):
+        """View all blacklisted users."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for blacklist-view command - user: {interaction.user.name}"
+                )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in blacklist-view: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in blacklist-view command")
+            return
+
+        blacklisted_users = await database.get_blacklist()
+
+        if not blacklisted_users:
+            await interaction.followup.send(
+                "📋 No users are currently blacklisted.", ephemeral=True
+            )
+            return
+
+        embed = discord.Embed(
+            title="🚫 Blacklisted Users",
+            description=f"There are {len(blacklisted_users)} blacklisted user(s)",
+            color=discord.Color.orange(),
+        )
+
+        # Show first 10 blacklisted users
+        for i, user_data in enumerate(blacklisted_users[:10]):
+            user_id = user_data["discord_id"]
+            reason = user_data.get("reason", "No reason provided")
+            blacklisted_at = user_data.get("blacklisted_at", "Unknown")
+            
+            # Format blacklisted_at timestamp
+            if isinstance(blacklisted_at, datetime):
+                blacklisted_at_str = blacklisted_at.strftime("%Y-%m-%d %H:%M:%S")
+            elif isinstance(blacklisted_at, str):
+                blacklisted_at_str = blacklisted_at
+            else:
+                blacklisted_at_str = str(blacklisted_at)
+
+            member = interaction.guild.get_member(user_id)
+            user_mention = member.mention if member else f"<@{user_id}> (Not in server)"
+
+            embed.add_field(
+                name=f"User #{i + 1}",
+                value=f"**User:** {user_mention}\n**Reason:** {reason}\n**Blacklisted:** {blacklisted_at_str}",
+                inline=False,
+            )
+
+        if len(blacklisted_users) > 10:
+            embed.set_footer(text=f"Showing 10 of {len(blacklisted_users)} blacklisted users")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     async def _get_all_discord_members(self) -> List[Dict[str, Any]]:
         """Get all members from database. Helper function for bulk operations."""
-        async with database.aiosqlite.connect(database.DATABASE_PATH) as db:
-            db.row_factory = database.aiosqlite.Row
-            async with db.execute("SELECT * FROM members") as cursor:
-                rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+        return await database.get_all_members()
 
     async def _update_member_role(
         self, member: discord.Member, old_rank_order: int, new_rank_order: int

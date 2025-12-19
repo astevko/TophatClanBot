@@ -222,6 +222,72 @@ class TophatClanBot(commands.Bot):
         logger.info("Bot is ready!")
         logger.debug(f"Discord logging enabled to channel {Config.LOG_CHANNEL_ID}")
 
+    async def setup_hook(self):
+        """Called when the bot is starting up."""
+        logger.debug("Setting up bot...")
+
+        # Initialize database
+        await database.init_database()
+
+        # Verify Roblox API credentials
+        logger.debug("Verifying Roblox API credentials...")
+        roblox_verified = await roblox_api.verify_roblox_credentials()
+        if roblox_verified:
+            logger.info("✅ Roblox API credentials verified successfully")
+        else:
+            logger.warning("⚠️ Roblox API verification failed - some features may not work")
+
+        # Add global check for blacklist
+        async def blacklist_check(interaction: discord.Interaction) -> bool:
+            """Global check for blacklist on all commands."""
+            # Commands that bypass blacklist check
+            EXEMPTED_COMMANDS = ["xp", "link-roblox", "show-my-id", "leaderboard"]
+            
+            command_name = interaction.command.name if interaction.command else None
+            
+            # Skip blacklist check for exempted commands
+            if command_name in EXEMPTED_COMMANDS:
+                return True
+            
+            # Check if user is blacklisted
+            is_blocked = await database.is_blacklisted(interaction.user.id)
+            if is_blocked:
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            "❌ You are blacklisted from using commands.",
+                            ephemeral=True
+                        )
+                except Exception as e:
+                    logger.error(f"Error sending blacklist message: {e}")
+                return False
+            
+            return True
+        
+        # Add the blacklist check to the command tree
+        self.tree.interaction_check = blacklist_check
+
+        # Load command modules
+        await self.load_extension("commands.user_commands")
+        await self.load_extension("commands.admin_commands")
+
+        # Sync commands with Discord
+        if self.guild_id:
+            guild = discord.Object(id=self.guild_id)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            logger.debug(f"Synced commands to guild {self.guild_id}")
+        else:
+            await self.tree.sync()
+            logger.info("Synced commands globally")
+
+        # Start background tasks
+        if not self.auto_sync_ranks.is_running():
+            self.auto_sync_ranks.start()
+            logger.info("✅ Started automatic rank synchronization task")
+
+        logger.info("Bot setup complete")
+
     async def on_command_error(self, ctx, error):
         """Global error handler for commands."""
         if isinstance(error, commands.CommandNotFound):
@@ -471,6 +537,8 @@ def is_admin():
         return False
 
     return app_commands.check(predicate)
+
+
 
 
 async def main():

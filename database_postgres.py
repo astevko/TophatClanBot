@@ -88,6 +88,16 @@ async def init_database():
             )
         """)
 
+        # Blacklist table for blocking users from commands
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS blacklist (
+                discord_id BIGINT PRIMARY KEY,
+                reason TEXT,
+                blacklisted_at TIMESTAMP NOT NULL,
+                blacklisted_by BIGINT
+            )
+        """)
+
         logger.info("PostgreSQL database initialized successfully")
 
         # Insert default ranks
@@ -493,3 +503,68 @@ async def set_config(key: str, value: str) -> bool:
         )
         logger.info(f"Set config {key} = {value}")
         return True
+
+
+# ============= BLACKLIST OPERATIONS =============
+
+
+async def is_blacklisted(discord_id: int) -> bool:
+    """Check if a user is blacklisted."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT discord_id FROM blacklist WHERE discord_id = $1
+        """,
+            discord_id,
+        )
+        return row is not None
+
+
+async def add_to_blacklist(discord_id: int, reason: Optional[str] = None, blacklisted_by: Optional[int] = None) -> bool:
+    """Add a user to the blacklist."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO blacklist (discord_id, reason, blacklisted_at, blacklisted_by)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (discord_id) DO UPDATE SET reason = $2, blacklisted_at = $3, blacklisted_by = $4
+        """,
+            discord_id,
+            reason,
+            datetime.utcnow(),
+            blacklisted_by,
+        )
+        logger.info(f"Added {discord_id} to blacklist (reason: {reason})")
+        return True
+
+
+async def remove_from_blacklist(discord_id: int) -> bool:
+    """Remove a user from the blacklist."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM blacklist WHERE discord_id = $1
+        """,
+            discord_id,
+        )
+        if result == "DELETE 1":
+            logger.info(f"Removed {discord_id} from blacklist")
+            return True
+        return False
+
+
+async def get_blacklist() -> List[Dict[str, Any]]:
+    """Get all blacklisted users."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT discord_id, reason, blacklisted_at, blacklisted_by
+            FROM blacklist
+            ORDER BY blacklisted_at DESC
+        """
+        )
+        return [dict(row) for row in rows]
