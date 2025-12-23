@@ -70,9 +70,21 @@ async def init_database():
                 rank_name TEXT NOT NULL UNIQUE,
                 points_required INTEGER NOT NULL,
                 roblox_group_rank_id INTEGER NOT NULL,
-                admin_only BOOLEAN DEFAULT 0
+                admin_only BOOLEAN DEFAULT 0,
+                discord_role_id INTEGER
             )
         """)
+        
+        # Migration: Add discord_role_id column if it doesn't exist
+        try:
+            await db.execute("""
+                ALTER TABLE rank_requirements ADD COLUMN discord_role_id INTEGER
+            """)
+            await db.commit()
+            logger.info("Added discord_role_id column to rank_requirements table")
+        except aiosqlite.OperationalError:
+            # Column already exists, skip migration
+            pass
 
         # Config table for storing bot configuration
         await db.execute("""
@@ -134,8 +146,8 @@ async def insert_default_ranks(db):
         await db.execute(
             """
             INSERT OR IGNORE INTO rank_requirements
-            (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
-            VALUES (?, ?, ?, ?, ?)
+            (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only, discord_role_id)
+            VALUES (?, ?, ?, ?, ?, NULL)
         """,
             (rank_order, rank_name, points_required, roblox_rank_id, admin_only),
         )
@@ -338,6 +350,20 @@ async def get_rank_by_order(rank_order: int) -> Optional[Dict[str, Any]]:
             if row:
                 return dict(row)
             return None
+
+
+async def set_rank_discord_role_id(rank_order: int, discord_role_id: Optional[int]) -> bool:
+    """Update the Discord role ID for a rank."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """
+            UPDATE rank_requirements SET discord_role_id = ? WHERE rank_order = ?
+        """,
+            (discord_role_id, rank_order),
+        )
+        await db.commit()
+        logger.info(f"Updated Discord role ID for rank {rank_order} to {discord_role_id}")
+        return True
 
 
 async def get_next_rank(

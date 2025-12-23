@@ -175,7 +175,8 @@ async def init_database():
                     rank_name VARCHAR2(100) NOT NULL UNIQUE,
                     points_required NUMBER(10) NOT NULL,
                     roblox_group_rank_id NUMBER(10) NOT NULL,
-                    admin_only NUMBER(1) DEFAULT 0
+                    admin_only NUMBER(1) DEFAULT 0,
+                    discord_role_id NUMBER(20)
                 )
             """)
             logger.info("Created rank_requirements table")
@@ -183,6 +184,28 @@ async def init_database():
             error_obj, = e.args
             if error_obj.code == 955:  # Table already exists
                 logger.info("Rank requirements table already exists")
+                
+                # Migration: Add discord_role_id column if it doesn't exist
+                try:
+                    cursor.execute("""
+                        SELECT COUNT(*) 
+                        FROM user_tab_columns 
+                        WHERE table_name = 'RANK_REQUIREMENTS' 
+                        AND column_name = 'DISCORD_ROLE_ID'
+                    """)
+                    discord_role_id_exists = cursor.fetchone()[0] > 0
+                    
+                    if not discord_role_id_exists:
+                        logger.info("Adding discord_role_id column to existing rank_requirements table")
+                        cursor.execute("""
+                            ALTER TABLE rank_requirements 
+                            ADD discord_role_id NUMBER(20)
+                        """)
+                        connection.commit()
+                        logger.info("Added discord_role_id column to rank_requirements table")
+                except oracledb.DatabaseError as e2:
+                    error_obj2, = e2.args
+                    logger.warning(f"Could not check/add discord_role_id column: {error_obj2.message}")
             else:
                 raise
 
@@ -269,8 +292,8 @@ async def insert_default_ranks(connection):
             cursor.execute(
                 """
                 INSERT INTO rank_requirements
-                (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
-                VALUES (:1, :2, :3, :4, :5)
+                (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only, discord_role_id)
+                VALUES (:1, :2, :3, :4, :5, NULL)
                 """,
                 [rank_order, rank_name, points_required, roblox_rank_id, admin_only],
             )
@@ -532,7 +555,29 @@ async def get_rank_by_order(rank_order: int) -> Optional[Dict[str, Any]]:
             [rank_order],
         )
         row = cursor.fetchone()
-        return _dict_from_row(cursor, row)
+        if row:
+            return _dict_from_row(cursor, row)
+        return None
+    finally:
+        pool.release(connection)
+
+
+async def set_rank_discord_role_id(rank_order: int, discord_role_id: Optional[int]) -> bool:
+    """Update the Discord role ID for a rank."""
+    pool = await get_pool()
+    connection = pool.acquire()
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE rank_requirements SET discord_role_id = :1 WHERE rank_order = :2
+            """,
+            [discord_role_id, rank_order],
+        )
+        connection.commit()
+        logger.info(f"Updated Discord role ID for rank {rank_order} to {discord_role_id}")
+        return True
     finally:
         pool.release(connection)
 

@@ -2096,6 +2096,61 @@ class AdminCommands(commands.Cog):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @app_commands.command(
+        name="set-rank-role",
+        description="[ADMIN] Set the Discord role ID for a specific rank"
+    )
+    @app_commands.describe(
+        rank_order="The rank order number (1, 2, 3, etc.)",
+        role="The Discord role to assign for this rank"
+    )
+    @is_admin()
+    async def set_rank_role(
+        self, interaction: discord.Interaction, rank_order: int, role: discord.Role
+    ):
+        """Set the Discord role ID for a rank."""
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.errors.NotFound:
+                logger.warning(
+                    f"Interaction expired for set-rank-role command - user: {interaction.user.name}"
+                )
+                return
+            except Exception as e:
+                logger.error(f"Error deferring interaction in set-rank-role: {e}")
+                return
+        else:
+            logger.warning("Interaction already responded to in set-rank-role command")
+            return
+
+        # Get rank info to verify it exists
+        rank_info = await database.get_rank_by_order(rank_order)
+        if not rank_info:
+            await interaction.followup.send(
+                f"❌ Rank with order {rank_order} not found.", ephemeral=True
+            )
+            return
+
+        # Update the Discord role ID
+        success = await database.set_rank_discord_role_id(rank_order, role.id)
+        
+        if success:
+            embed = discord.Embed(
+                title="✅ Rank Role Updated",
+                description=f"Discord role updated for rank **{rank_info['rank_name']}**",
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="Rank", value=f"{rank_info['rank_name']} (Order: {rank_order})", inline=True)
+            embed.add_field(name="Discord Role", value=f"{role.mention} (ID: {role.id})", inline=True)
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            logger.info(f"{interaction.user.name} set Discord role {role.id} for rank {rank_order} ({rank_info['rank_name']})")
+        else:
+            await interaction.followup.send(
+                "❌ Failed to update rank role.", ephemeral=True
+            )
+
     async def _get_all_discord_members(self) -> List[Dict[str, Any]]:
         """Get all members from database. Helper function for bulk operations."""
         return await database.get_all_members()
@@ -2112,7 +2167,15 @@ class AdminCommands(commands.Cog):
             return
 
         # Remove old rank role with retry logic
-        old_role = discord.utils.get(member.guild.roles, name=old_rank["rank_name"])
+        old_role = None
+        old_discord_role_id = old_rank.get("discord_role_id")
+        
+        if old_discord_role_id:
+            old_role = member.guild.get_role(old_discord_role_id)
+        
+        if not old_role:
+            old_role = discord.utils.get(member.guild.roles, name=old_rank["rank_name"])
+        
         if old_role:
             for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
                 try:
@@ -2138,15 +2201,30 @@ class AdminCommands(commands.Cog):
                         logger.error(f"HTTP error removing role: {e}")
                         return
 
-        # Add new rank role (create if doesn't exist) with retry logic
-        new_role = discord.utils.get(member.guild.roles, name=new_rank["rank_name"])
+        # Add new rank role (use ID first, then name, then create if needed)
+        new_role = None
+        new_discord_role_id = new_rank.get("discord_role_id")
+        
+        if new_discord_role_id:
+            new_role = member.guild.get_role(new_discord_role_id)
+            if not new_role:
+                logger.warning(
+                    f"Discord role ID {new_discord_role_id} for rank '{new_rank['rank_name']}' not found in guild. "
+                    f"Falling back to role name search."
+                )
+        
         if not new_role:
+            new_role = discord.utils.get(member.guild.roles, name=new_rank["rank_name"])
+        
+        # If still no role found, try to create it (only if discord_role_id is not set)
+        if not new_role and not new_discord_role_id:
             # Create the role if it doesn't exist with retry logic
             for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
                 try:
                     new_role = await member.guild.create_role(
                         name=new_rank["rank_name"], reason="Clan rank role"
                     )
+                    logger.info(f"Created Discord role '{new_rank['rank_name']}' (ID: {new_role.id})")
                     break
                 except discord.Forbidden:
                     logger.error("Bot doesn't have permission to create roles")
@@ -2167,6 +2245,13 @@ class AdminCommands(commands.Cog):
                     else:
                         logger.error(f"HTTP error creating role: {e}")
                         return
+        
+        if not new_role:
+            logger.error(
+                f"Could not find or create Discord role for rank '{new_rank['rank_name']}'. "
+                f"Discord role ID was set to {new_discord_role_id} but role not found."
+            )
+            return
 
         # Add the role with retry logic
         for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):

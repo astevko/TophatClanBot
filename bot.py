@@ -451,7 +451,15 @@ class TophatClanBot(commands.Bot):
                 return
 
             # Remove old rank role with retry logic
-            old_role = discord.utils.get(member.guild.roles, name=old_rank["rank_name"])
+            old_role = None
+            old_discord_role_id = old_rank.get("discord_role_id")
+            
+            if old_discord_role_id:
+                old_role = member.guild.get_role(old_discord_role_id)
+            
+            if not old_role:
+                old_role = discord.utils.get(member.guild.roles, name=old_rank["rank_name"])
+            
             if old_role and old_role in member.roles:
                 for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
                     try:
@@ -473,15 +481,30 @@ class TophatClanBot(commands.Bot):
                         else:
                             raise
 
-            # Add new rank role (create if doesn't exist) with retry logic
-            new_role = discord.utils.get(member.guild.roles, name=new_rank["rank_name"])
+            # Add new rank role (use ID first, then name, then create if needed)
+            new_role = None
+            new_discord_role_id = new_rank.get("discord_role_id")
+            
+            if new_discord_role_id:
+                new_role = member.guild.get_role(new_discord_role_id)
+                if not new_role:
+                    logger.warning(
+                        f"Discord role ID {new_discord_role_id} for rank '{new_rank['rank_name']}' not found in guild. "
+                        f"Falling back to role name search."
+                    )
+            
             if not new_role:
+                new_role = discord.utils.get(member.guild.roles, name=new_rank["rank_name"])
+            
+            # If still no role found, try to create it (only if discord_role_id is not set)
+            if not new_role and not new_discord_role_id:
                 # Create the role if it doesn't exist with retry logic
                 for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
                     try:
                         new_role = await member.guild.create_role(
                             name=new_rank["rank_name"], reason="Clan rank role"
                         )
+                        logger.info(f"Created Discord role '{new_rank['rank_name']}' (ID: {new_role.id})")
                         break
                     except discord.HTTPException as e:
                         if e.status == 429 and attempt < Config.MAX_RATE_LIMIT_RETRIES - 1:
@@ -498,6 +521,13 @@ class TophatClanBot(commands.Bot):
                             raise
                         else:
                             raise
+            
+            if not new_role:
+                logger.error(
+                    f"Could not find or create Discord role for rank '{new_rank['rank_name']}'. "
+                    f"Discord role ID was set to {new_discord_role_id} but role not found."
+                )
+                return
 
             # Add the role with retry logic
             for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):

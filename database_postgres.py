@@ -76,9 +76,20 @@ async def init_database():
                 rank_name TEXT NOT NULL UNIQUE,
                 points_required INTEGER NOT NULL,
                 roblox_group_rank_id INTEGER NOT NULL,
-                admin_only BOOLEAN DEFAULT FALSE
+                admin_only BOOLEAN DEFAULT FALSE,
+                discord_role_id BIGINT
             )
         """)
+        
+        # Migration: Add discord_role_id column if it doesn't exist
+        try:
+            await conn.execute("""
+                ALTER TABLE rank_requirements ADD COLUMN IF NOT EXISTS discord_role_id BIGINT
+            """)
+            logger.info("Added discord_role_id column to rank_requirements table")
+        except Exception as e:
+            # Column might already exist, skip migration
+            logger.debug(f"Migration check: {e}")
 
         # Config table
         await conn.execute("""
@@ -137,8 +148,8 @@ async def insert_default_ranks(conn):
         await conn.execute(
             """
             INSERT INTO rank_requirements
-            (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only)
-            VALUES ($1, $2, $3, $4, $5)
+            (rank_order, rank_name, points_required, roblox_group_rank_id, admin_only, discord_role_id)
+            VALUES ($1, $2, $3, $4, $5, NULL)
             ON CONFLICT (rank_order) DO NOTHING
         """,
             rank_order,
@@ -345,6 +356,21 @@ async def get_rank_by_order(rank_order: int) -> Optional[Dict[str, Any]]:
         if row:
             return dict(row)
         return None
+
+
+async def set_rank_discord_role_id(rank_order: int, discord_role_id: Optional[int]) -> bool:
+    """Update the Discord role ID for a rank."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE rank_requirements SET discord_role_id = $1 WHERE rank_order = $2
+        """,
+            discord_role_id,
+            rank_order,
+        )
+        logger.info(f"Updated Discord role ID for rank {rank_order} to {discord_role_id}")
+        return True
 
 
 async def get_next_rank(

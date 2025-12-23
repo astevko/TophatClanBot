@@ -1230,15 +1230,31 @@ class UserCommands(commands.Cog):
         if not rank_info:
             return
 
-        # Find or create the role with retry logic
-        role = discord.utils.get(member.guild.roles, name=rank_info["rank_name"])
+        # Try to get role by ID first (if discord_role_id is set)
+        role = None
+        discord_role_id = rank_info.get("discord_role_id")
+        
+        if discord_role_id:
+            role = member.guild.get_role(discord_role_id)
+            if not role:
+                logger.warning(
+                    f"Discord role ID {discord_role_id} for rank '{rank_info['rank_name']}' not found in guild. "
+                    f"Falling back to role name search."
+                )
+        
+        # Fallback to role name if ID not set or role not found
         if not role:
+            role = discord.utils.get(member.guild.roles, name=rank_info["rank_name"])
+        
+        # If still no role found, try to create it (only if discord_role_id is not set)
+        if not role and not discord_role_id:
             # Create the role if it doesn't exist with retry logic
             for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
                 try:
                     role = await member.guild.create_role(
                         name=rank_info["rank_name"], reason="Clan rank role"
                     )
+                    logger.info(f"Created Discord role '{rank_info['rank_name']}' (ID: {role.id})")
                     break
                 except discord.Forbidden:
                     logger.error("Bot doesn't have permission to create roles")
@@ -1259,6 +1275,13 @@ class UserCommands(commands.Cog):
                     else:
                         logger.error(f"HTTP error creating role: {e}")
                         return
+        
+        if not role:
+            logger.error(
+                f"Could not find or create Discord role for rank '{rank_info['rank_name']}'. "
+                f"Discord role ID was set to {discord_role_id} but role not found."
+            )
+            return
 
         # Assign the role with retry logic
         for attempt in range(Config.MAX_RATE_LIMIT_RETRIES):
