@@ -881,6 +881,14 @@ class UserCommands(commands.Cog):
             )
             return
 
+        # Fetch current user's member data
+        user_member = None
+        try:
+            user_member = await database.get_member(interaction.user.id)
+        except Exception as e:
+            logger.error(f"Error fetching user data in leaderboard command: {e}", exc_info=True)
+            # Continue without user data - don't fail the leaderboard display
+
         embed = discord.Embed(
             title="🏆 TophatC Clan Leaderboard",
             description="Top 10 members by activity points",
@@ -897,6 +905,15 @@ class UserCommands(commands.Cog):
 
             leaderboard_text += (
                 f"{medal} {username} - **{member['rank_name']}** ({member['points']} pts)\n"
+            )
+
+        # Add user's points at the bottom if they're registered
+        if user_member:
+            user_username = interaction.user.mention
+            user_total_points = user_member.get("total_points", user_member.get("points", 0))
+            user_rank_name = user_member.get("rank_name", "Unknown")
+            leaderboard_text += (
+                f"\n**Your Points:** {user_username} - **{user_rank_name}** ({user_total_points} pts)"
             )
 
         embed.description = leaderboard_text
