@@ -39,13 +39,13 @@ graph TB
     subgraph oracleCloud [Oracle Cloud Server]
         subgraph db [Oracle Database]
             Schema1[tophat_schema]
-            Schema2[newclan_schema]
+            Schema2[graves_schema]
             Schema3[future_clan_schema]
         end
         
         subgraph docker [Docker Host]
             Bot1[TophatClan Bot]
-            Bot2[NewClan Bot]
+            Bot2[Graves Family Bot]
             Bot3[Future Clan Bot]
         end
     end
@@ -55,7 +55,7 @@ graph TB
     Bot3 --> Schema3
     
     Discord1[TophatC Discord] --> Bot1
-    Discord2[NewClan Discord] --> Bot2
+    Discord2[Graves Family Discord] --> Bot2
 ```
 
 ---
@@ -86,7 +86,7 @@ configs/
   tophat/
     ranks.json
     settings.json
-  newclan/
+  graves_family/
     ranks.json
     settings.json
 ```
@@ -118,11 +118,11 @@ Each clan gets their own Oracle schema with identical table structures:
 ```sql
 -- Create schema for each clan
 CREATE USER tophat_bot IDENTIFIED BY "password";
-CREATE USER newclan_bot IDENTIFIED BY "password";
+CREATE USER graves_bot IDENTIFIED BY "password";
 
 -- Grant permissions
 GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO tophat_bot;
-GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO newclan_bot;
+GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO graves_bot;
 ```
 
 ### 2.2 Database Connection
@@ -146,7 +146,7 @@ deployments/
   tophat/
     docker-compose.yml
     .env
-  newclan/
+  graves_family/
     docker-compose.yml
     .env
 ```
@@ -161,7 +161,7 @@ Modify [Dockerfile](../Dockerfile) to build a generic image - no clan-specific c
 
 For non-Docker deployments: `/etc/systemd/system/clan-bot@.service`
 
-Usage: `systemctl start clan-bot@tophat` or `clan-bot@newclan`
+Usage: `systemctl start clan-bot@tophat` or `clan-bot@graves_family`
 
 ---
 
