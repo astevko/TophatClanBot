@@ -1,6 +1,7 @@
 """
-PostgreSQL database adapter for TophatC Clan Bot
+PostgreSQL database adapter for Clan Bot
 Used when deployed to cloud platforms (Railway, Render, etc.)
+Supports multi-clan deployments.
 """
 
 import logging
@@ -9,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import asyncpg
 
-from config import Config
+from config import Config, load_ranks_config
 
 logger = logging.getLogger(__name__)
 
@@ -117,32 +118,49 @@ async def init_database():
 
 async def insert_default_ranks(conn):
     """Insert default military ranks into the database."""
-    default_ranks = [
-        # Point-Based Ranks (can auto-promote based on points)
-        (1, "Private", 0, 1, False),
-        (2, "Corporal", 30, 2, False),
-        (3, "Sergeant", 60, 3, False),
-        (4, "Staff Sergeant", 100, 4, False),
-        (5, "Lieutenant", 150, 5, False),
-        (6, "Captain", 210, 6, False),
-        (7, "Major", 280, 7, False),
-        (8, "Colonel", 360, 8, False),
-        (9, "General", 450, 9, False),
-        # Admin-Only Ranks - Leadership
-        (10, "Officer Cadet", 0, 10, True),
-        (11, "Junior Officer", 0, 11, True),
-        (12, "Senior Officer", 0, 12, True),
-        (13, "Commander", 0, 13, True),
-        (14, "High Commander", 0, 14, True),
-        # Admin-Only Ranks - Honorary
-        (15, "Veteran", 0, 15, True),
-        (16, "Elite Guard", 0, 16, True),
-        (17, "Legend", 0, 17, True),
-        (18, "Hall of Fame", 0, 18, True),
-        # Admin-Only Ranks - Trial/Probation
-        (19, "Recruit", 0, 19, True),
-        (20, "Probation", 0, 20, True),
-    ]
+    # Try to load ranks from JSON config file
+    ranks_config = load_ranks_config()
+    
+    if ranks_config:
+        # Convert JSON ranks to tuples (PostgreSQL uses boolean)
+        default_ranks = [
+            (
+                rank["rank_order"],
+                rank["rank_name"],
+                rank["points_required"],
+                rank["roblox_group_rank_id"],
+                rank["admin_only"],  # PostgreSQL uses boolean
+            )
+            for rank in ranks_config
+        ]
+    else:
+        # Fallback to hardcoded default ranks (generic format)
+        default_ranks = [
+            # Point-Based Ranks (can auto-promote based on points)
+            (1, "Private", 0, 1, False),
+            (2, "Corporal", 30, 2, False),
+            (3, "Sergeant", 60, 3, False),
+            (4, "Staff Sergeant", 100, 4, False),
+            (5, "Lieutenant", 150, 5, False),
+            (6, "Captain", 210, 6, False),
+            (7, "Major", 280, 7, False),
+            (8, "Colonel", 360, 8, False),
+            (9, "General", 450, 9, False),
+            # Admin-Only Ranks - Leadership
+            (10, "Officer Cadet", 0, 10, True),
+            (11, "Junior Officer", 0, 11, True),
+            (12, "Senior Officer", 0, 12, True),
+            (13, "Commander", 0, 13, True),
+            (14, "High Commander", 0, 14, True),
+            # Admin-Only Ranks - Honorary
+            (15, "Veteran", 0, 15, True),
+            (16, "Elite Guard", 0, 16, True),
+            (17, "Legend", 0, 17, True),
+            (18, "Hall of Fame", 0, 18, True),
+            # Admin-Only Ranks - Trial/Probation
+            (19, "Recruit", 0, 19, True),
+            (20, "Probation", 0, 20, True),
+        ]
 
     for rank_order, rank_name, points_required, roblox_rank_id, admin_only in default_ranks:
         await conn.execute(

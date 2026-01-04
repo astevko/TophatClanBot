@@ -1,0 +1,143 @@
+[
+  {
+    "rank_order": 1,
+    "rank_name": "Private",
+    "points_required": 0,
+    "roblox_group_rank_id": 1,
+    "admin_only": false
+  },
+  {
+    "rank_order": 2,
+    "rank_name": "Corporal",
+    "points_required": 30,
+    "roblox_group_rank_id": 2,
+    "admin_only": false
+  },
+  {
+    "rank_order": 3,
+    "rank_name": "Sergeant",
+    "points_required": 60,
+    "roblox_group_rank_id": 3,
+    "admin_only": false
+  },
+  {
+    "rank_order": 4,
+    "rank_name": "Staff Sergeant",
+    "points_required": 100,
+    "roblox_group_rank_id": 4,
+    "admin_only": false
+  },
+  {
+    "rank_order": 5,
+    "rank_name": "Lieutenant",
+    "points_required": 150,
+    "roblox_group_rank_id": 5,
+    "admin_only": false
+  },
+  {
+    "rank_order": 6,
+    "rank_name": "Captain",
+    "points_required": 210,
+    "roblox_group_rank_id": 6,
+    "admin_only": false
+  },
+  {
+    "rank_order": 7,
+    "rank_name": "Major",
+    "points_required": 280,
+    "roblox_group_rank_id": 7,
+    "admin_only": false
+  },
+  {
+    "rank_order": 8,
+    "rank_name": "Colonel",
+    "points_required": 360,
+    "roblox_group_rank_id": 8,
+    "admin_only": false
+  },
+  {
+    "rank_order": 9,
+    "rank_name": "General",
+    "points_required": 450,
+    "roblox_group_rank_id": 9,
+    "admin_only": false
+  },
+  {
+    "rank_order": 10,
+    "rank_name": "Officer Cadet",
+    "points_required": 0,
+    "roblox_group_rank_id": 10,
+    "admin_only": true
+  },
+  {
+    "rank_order": 11,
+    "rank_name": "Junior Officer",
+    "points_required": 0,
+    "roblox_group_rank_id": 11,
+    "admin_only": true
+  },
+  {
+    "rank_order": 12,
+    "rank_name": "Senior Officer",
+    "points_required": 0,
+    "roblox_group_rank_id": 12,
+    "admin_only": true
+  },
+  {
+    "rank_order": 13,
+    "rank_name": "Commander",
+    "points_required": 0,
+    "roblox_group_rank_id": 13,
+    "admin_only": true
+  },
+  {
+    "rank_order": 14,
+    "rank_name": "High Commander",
+    "points_required": 0,
+    "roblox_group_rank_id": 14,
+    "admin_only": true
+  },
+  {
+    "rank_order": 15,
+    "rank_name": "Veteran",
+    "points_required": 0,
+    "roblox_group_rank_id": 15,
+    "admin_only": true
+  },
+  {
+    "rank_order": 16,
+    "rank_name": "Elite Guard",
+    "points_required": 0,
+    "roblox_group_rank_id": 16,
+    "admin_only": true
+  },
+  {
+    "rank_order": 17,
+    "rank_name": "Legend",
+    "points_required": 0,
+    "roblox_group_rank_id": 17,
+    "admin_only": true
+  },
+  {
+    "rank_order": 18,
+    "rank_name": "Hall of Fame",
+    "points_required": 0,
+    "roblox_group_rank_id": 18,
+    "admin_only": true
+  },
+  {
+    "rank_order": 19,
+    "rank_name": "Recruit",
+    "points_required": 0,
+    "roblox_group_rank_id": 19,
+    "admin_only": true
+  },
+  {
+    "rank_order": 20,
+    "rank_name": "Probation",
+    "points_required": 0,
+    "roblox_group_rank_id": 20,
+    "admin_only": true
+  }
+]
+

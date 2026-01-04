@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Discord Bot for Graves Family Clan
+  bot:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: graves-family-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Clan Identity
+      CLAN_NAME: Graves Family
+      CLAN_CONFIG_DIR: graves_family
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-graves_schema}
+    volumes:
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount configs directory (if needed)
+      - ../../configs:/app/configs:ro
+    networks:
+      - botnet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  botnet:
+    driver: bridge
+    external: false
+

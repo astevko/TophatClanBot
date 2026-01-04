@@ -1,18 +1,39 @@
 """
-Configuration management for TophatC Clan Bot
+Configuration management for Clan Bot
 Loads environment variables and provides configuration access.
+Supports multi-clan deployments with per-clan configuration.
 """
 
+import json
+import logging
 import os
+from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 
 class Config:
     """Bot configuration from environment variables."""
+
+    # Clan Identity Configuration
+    CLAN_NAME = os.getenv("CLAN_NAME", "Clan")  # Default to "Clan" for backward compatibility
+    CLAN_CONFIG_DIR = os.getenv("CLAN_CONFIG_DIR")  # Optional: override config directory name
+    DATABASE_SCHEMA = os.getenv("DATABASE_SCHEMA")  # Oracle schema name (optional, defaults to ORACLE_USER)
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "clan_data.db")  # SQLite database file path
+    
+    @classmethod
+    def get_clan_config_dir(cls) -> str:
+        """Get the clan configuration directory name."""
+        if cls.CLAN_CONFIG_DIR:
+            return cls.CLAN_CONFIG_DIR
+        # Normalize CLAN_NAME to directory name: lowercase, replace spaces with underscores
+        return cls.CLAN_NAME.lower().replace(" ", "_")
 
     # Discord Configuration
     DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -96,3 +117,25 @@ class Config:
             raise ValueError("Configuration errors:\n" + "\n".join(f"  - {e}" for e in errors))
 
         return True
+
+
+def load_ranks_config() -> Optional[List[Dict[str, Any]]]:
+    """
+    Load rank configuration from JSON file.
+    Returns list of rank dictionaries or None if file not found.
+    """
+    config_dir = Config.get_clan_config_dir()
+    ranks_file = Path("configs") / config_dir / "ranks.json"
+    
+    if not ranks_file.exists():
+        logger.warning(f"Ranks config file not found: {ranks_file}. Using default ranks from code.")
+        return None
+    
+    try:
+        with open(ranks_file, "r", encoding="utf-8") as f:
+            ranks = json.load(f)
+            logger.info(f"Loaded {len(ranks)} ranks from {ranks_file}")
+            return ranks
+    except (json.JSONDecodeError, IOError) as e:
+        logger.error(f"Error loading ranks config from {ranks_file}: {e}")
+        return None

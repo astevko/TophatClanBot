@@ -1,6 +1,7 @@
 """
-Oracle database adapter for TophatC Clan Bot
+Oracle database adapter for Clan Bot
 Used when deployed to Oracle Cloud Infrastructure
+Supports multi-clan deployments with per-clan schemas.
 """
 
 import logging
@@ -9,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import oracledb
 
-from config import Config
+from config import Config, load_ranks_config
 
 logger = logging.getLogger(__name__)
 
@@ -255,35 +256,52 @@ async def init_database():
 
 async def insert_default_ranks(connection):
     """Insert default military ranks into the database."""
-    default_ranks = [
-        # Point-Based Ranks (can auto-promote based on points)
-        (1, "Pending", 0, 1, 0),
-        (2, "E0 | Enlist", 1, 2, 0),
-        (3, "E1 | Soldier", 3, 45, 0),
-        (4, "E2 | Specialist", 1, 46, 0),
-        (5, "E3 | Lance Corporal", 2, 47, 0),
-        (6, "E4 | Corporal", 35, 48, 0),
-        (7, "E5 | Seargeant", 50, 49, 0),
-        (8, "E6 | Top Seargeant", 80, 50, 0),
-        (9, "E7 | Lieutenant", 120, 50, 0),
-        (10, "E8 | Top Lieutenant", 170, 51, 0),
-        # Admin-Only Ranks - Honorary
-        (11, "Allied Representative", 0, 118, 1),
-        (12, "Veteran TC", 0, 118, 1),
-        (13, "Queen TC", 0, 119, 1),
-        # Point-Based Ranks (continued)
-        (14, "C0 | Captain", 230, 121, 0),
-        (15, "C1 | Major", 310, 122, 0),
-        (16, "C2 | Colonel", 470, 124, 0),
-        # Admin-Only Ranks - Leadership
-        (17, "C3 | General", 0, 129, 1),
-        (18, "C4 | Conquistador", 0, 130, 1),
-        (19, "C5 | Chief Conquistador", 0, 149, 1),
-        (20, "Commander", 0, 150, 1),
-        (21, "Silver Leader", 0, 252, 1),
-        (22, "Red Leader", 0, 253, 1),
-        (23, "Gold Leader", 0, 255, 1),
-    ]
+    # Try to load ranks from JSON config file
+    ranks_config = load_ranks_config()
+    
+    if ranks_config:
+        # Convert JSON ranks to tuples (Oracle uses 0/1 for booleans)
+        default_ranks = [
+            (
+                rank["rank_order"],
+                rank["rank_name"],
+                rank["points_required"],
+                rank["roblox_group_rank_id"],
+                1 if rank["admin_only"] else 0,  # Convert boolean to 0/1 for Oracle
+            )
+            for rank in ranks_config
+        ]
+    else:
+        # Fallback to hardcoded default ranks (TophatC format)
+        default_ranks = [
+            # Point-Based Ranks (can auto-promote based on points)
+            (1, "Pending", 0, 1, 0),
+            (2, "E0 | Enlist", 1, 2, 0),
+            (3, "E1 | Soldier", 3, 45, 0),
+            (4, "E2 | Specialist", 1, 46, 0),
+            (5, "E3 | Lance Corporal", 2, 47, 0),
+            (6, "E4 | Corporal", 35, 48, 0),
+            (7, "E5 | Seargeant", 50, 49, 0),
+            (8, "E6 | Top Seargeant", 80, 50, 0),
+            (9, "E7 | Lieutenant", 120, 50, 0),
+            (10, "E8 | Top Lieutenant", 170, 51, 0),
+            # Admin-Only Ranks - Honorary
+            (11, "Allied Representative", 0, 118, 1),
+            (12, "Veteran TC", 0, 118, 1),
+            (13, "Queen TC", 0, 119, 1),
+            # Point-Based Ranks (continued)
+            (14, "C0 | Captain", 230, 121, 0),
+            (15, "C1 | Major", 310, 122, 0),
+            (16, "C2 | Colonel", 470, 124, 0),
+            # Admin-Only Ranks - Leadership
+            (17, "C3 | General", 0, 129, 1),
+            (18, "C4 | Conquistador", 0, 130, 1),
+            (19, "C5 | Chief Conquistador", 0, 149, 1),
+            (20, "Commander", 0, 150, 1),
+            (21, "Silver Leader", 0, 252, 1),
+            (22, "Red Leader", 0, 253, 1),
+            (23, "Gold Leader", 0, 255, 1),
+        ]
 
     cursor = connection.cursor()
 

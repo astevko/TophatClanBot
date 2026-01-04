@@ -1,5 +1,5 @@
 """
-TophatC Clan Discord Bot
+Clan Discord Bot
 Main bot entry point with Discord client setup and command registration.
 """
 
@@ -57,7 +57,7 @@ class DiscordHandler(logging.Handler):
     # Options: 'NONE', 'CRITICAL', 'ERROR', 'WARNING'
     min_discord_level = "WARNING"
 
-    def __init__(self, bot: Optional["TophatClanBot"] = None, channel_id: Optional[int] = None):
+    def __init__(self, bot: Optional["ClanBot"] = None, channel_id: Optional[int] = None):
         super().__init__()
         self.bot = bot
         self.channel_id = channel_id or Config.LOG_CHANNEL_ID
@@ -146,8 +146,8 @@ class DiscordHandler(logging.Handler):
             await asyncio.sleep(0.1)
 
 
-class TophatClanBot(commands.Bot):
-    """Custom bot class for TophatC Clan Bot."""
+class ClanBot(commands.Bot):
+    """Custom bot class for generic Clan Bot."""
 
     def __init__(self):
         intents = discord.Intents.default()
@@ -584,7 +584,7 @@ async def main():
         logger.debug("Configuration validated successfully")
 
         # Create and run bot
-        bot = TophatClanBot()
+        bot = ClanBot()
         async with bot:
             await bot.start(Config.DISCORD_BOT_TOKEN)
 
