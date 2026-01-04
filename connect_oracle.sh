@@ -4,8 +4,8 @@
 # Load credentials from .env file
 source /home/opc/TophatClanBot/.env
 
-sql /nolog <<EOF
-SET CLOUDCONFIG /home/opc/TophatClanBot/Wallet_perrydatabase.zip
-CONNECT ${ORACLE_ADMIN_USR}/${ORACLE_ADMIN_PASSWORD}@perrydatabase_high
-EOF
+# Create a login script that sets up the connection
+export TNS_ADMIN=/home/opc/TophatClanBot/wallet_config
+
+sql ${ORACLE_ADMIN_USR}/${ORACLE_ADMIN_PASSWORD}@perrydatabase_high
 
