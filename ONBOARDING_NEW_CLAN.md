@@ -11,6 +11,110 @@ This guide walks you through setting up a new clan bot instance alongside existi
 
 ---
 
+## Step 0: Install Docker (if not already installed)
+
+If Docker is not installed on your server, follow these steps:
+
+### For Oracle Linux (OL7/OL8/OL9)
+
+**Note:** The Docker installation script does not support Oracle Linux directly. Use one of these methods:
+
+#### Method 1: Using CentOS Repository (Recommended)
+
+```bash
+# Update system packages
+sudo yum update -y
+
+# Install required packages
+sudo yum install -y yum-utils
+
+# Add Docker repository (using CentOS repo - compatible with Oracle Linux)
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+# Install Docker Engine
+sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to docker group (replace 'opc' with your username)
+sudo usermod -aG docker opc
+
+# Log out and back in for group changes to take effect
+exit
+# SSH back in
+
+# Verify installations
+docker --version
+docker compose version
+```
+
+#### Method 2: Using Oracle Linux Repository (OL8/OL9)
+
+For Oracle Linux 8 or 9, you can use the Oracle Linux repository:
+
+```bash
+# Enable ol8_addons or ol9_addons repository
+sudo dnf config-manager --enable ol8_addons  # For OL8
+# OR
+sudo dnf config-manager --enable ol9_addons  # For OL9
+
+# Install Docker from Oracle repository
+sudo dnf install -y docker-engine docker-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to docker group
+sudo usermod -aG docker opc
+
+# Log out and back in
+exit
+
+# Verify
+docker --version
+docker compose version
+```
+
+#### Method 3: Manual Installation (if repositories don't work)
+
+```bash
+# Install required dependencies
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+
+# Add Docker repository manually
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+# If you get repository errors, you may need to modify the repo file:
+sudo vi /etc/yum.repos.d/docker-ce.repo
+# Change baseurl from centos to use a compatible mirror, or use:
+# baseurl=https://download.docker.com/linux/centos/$releasever/$basearch/stable
+
+# Install Docker
+sudo yum install -y docker-ce docker-ce-cli containerd.io
+
+# Install Docker Compose plugin separately
+sudo yum install -y docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add user to docker group
+sudo usermod -aG docker opc
+
+# Log out and back in
+exit
+
+# Verify
+docker --version
+docker compose version
+```
+
+---
+
 ## Step 1: Clone/Prepare Repository
 
 If deploying on a new server, clone the repository:
@@ -47,7 +151,7 @@ Replace `newclan_bot` and `password` with your clan's values:
 CREATE USER newclan_bot IDENTIFIED BY "secure_password_here";
 
 -- Grant necessary permissions
-GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO newclan_bot;
+GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO newclan_bot
 ```
 
 ### 2.3 Initialize Schema Tables
@@ -216,13 +320,13 @@ From your deployment directory:
 
 ```bash
 cd deployments/newclan
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### 8.2 Check Logs
 
 ```bash
-docker-compose logs -f bot
+docker compose logs -f bot
 ```
 
 The bot should:
@@ -247,13 +351,13 @@ The bot should:
 
 ```bash
 cd deployments/newclan
-docker-compose logs -f bot
+docker compose logs -f bot
 ```
 
 ### Restart Bot
 
 ```bash
-docker-compose restart bot
+docker compose restart bot
 ```
 
 ### Update Bot
@@ -265,13 +369,13 @@ git pull
 
 # Rebuild and restart
 cd deployments/newclan
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### Stop Bot
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ---
@@ -282,7 +386,7 @@ docker-compose down
 
 - Check `.env` file has all required variables
 - Verify Oracle credentials are correct
-- Check Docker logs: `docker-compose logs bot`
+- Check Docker logs: `docker compose logs bot`
 
 ### Ranks Not Loading
 
@@ -329,7 +433,7 @@ docker-compose down
 4. **Deploy:**
    ```bash
    cd deployments/graves_family
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
 ---

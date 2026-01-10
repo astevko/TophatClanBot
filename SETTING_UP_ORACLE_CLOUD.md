@@ -36,20 +36,29 @@ SQL> CONNECT ADMIN@perrydatabase_high
 Password? (**********?) ************
 -- If successful, you should see "Connected."
 
-## create user TOPHATCLAN_BOT
+## create user tophat_bot
 
 SQL> CREATE USER tophat_bot IDENTIFIED BY "YourSecurePassword123!";
 
-SQL> GRANT CONNECT TO TOPHATCLAN_BOT;
-
+-- Basic privileges (required for table creation)
+SQL> GRANT CONNECT TO tophat_bot;
 Grant succeeded.
 
-SQL> GRANT RESOURCE TO TOPHATCLAN_BOT;
-
+SQL> GRANT RESOURCE TO tophat_bot;
 Grant succeeded.
 
-SQL> GRANT UNLIMITED TABLESPACE TO TOPHATCLAN_BOT;
+SQL> GRANT UNLIMITED TABLESPACE TO tophat_bot;
+Grant succeeded.
 
+-- Additional privileges (required for IDENTITY columns, sequences, triggers)
+-- These are needed for the raid_submissions table auto-increment feature
+SQL> GRANT CREATE SEQUENCE TO tophat_bot;
+Grant succeeded.
+
+SQL> GRANT CREATE TRIGGER TO tophat_bot;
+Grant succeeded.
+
+SQL> GRANT CREATE PROCEDURE TO tophat_bot;
 Grant succeeded.
 
 SQL> DISCONNECT;
