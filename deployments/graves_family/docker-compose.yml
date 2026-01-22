@@ -1,9 +1,7 @@
 services:
   # Discord Bot for Graves Family Clan
   bot:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
+    image: ${OCIR_REGION}/${OCIR_TENANCY}/clanbot:latest
     container_name: graves-family-bot
     restart: unless-stopped
     env_file:

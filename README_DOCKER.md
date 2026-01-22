@@ -152,6 +152,31 @@ services:
     image: ghcr.io/YOUR_USERNAME/tophatclanbot:latest
 ```
 
+## Oracle Container Registry (OCIR)
+
+For private deployments to Oracle Cloud, images are also pushed to Oracle Container Registry.
+
+### Required GitHub Secrets for OCIR
+
+Add these secrets in your GitHub repository (Settings > Secrets and variables > Actions):
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `OCIR_REGION` | OCIR regional endpoint | `iad.ocir.io` (Ashburn), `phx.ocir.io` (Phoenix) |
+| `OCIR_TENANCY` | Your OCI tenancy namespace | Found in OCI Console > Tenancy Details |
+| `OCIR_USERNAME` | OCIR login username | `<tenancy>/<username>` or `<tenancy>/oracleidentitycloudservice/<email>` |
+| `OCIR_TOKEN` | Auth token for OCIR | Generate in OCI Console > User Settings > Auth Tokens |
+
+### Pull from OCIR on Oracle Instances
+
+```bash
+# Authenticate with OCIR (one-time setup)
+docker login <region>.ocir.io -u '<tenancy>/<username>' -p '<auth-token>'
+
+# Pull the image
+docker pull <region>.ocir.io/<tenancy>/clanbot:latest
+```
+
 ## 🔒 Security Features
 
 ### Dockerfile Security

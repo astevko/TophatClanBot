@@ -252,6 +252,10 @@ Edit `.env` and configure:
 CLAN_NAME=New Clan Name
 CLAN_CONFIG_DIR=newclan
 
+# OCIR Configuration (for pulling Docker images)
+OCIR_REGION=iad.ocir.io  # e.g., iad.ocir.io, phx.ocir.io
+OCIR_TENANCY=your-tenancy-namespace
+
 # Discord Configuration
 DISCORD_BOT_TOKEN=your_discord_bot_token
 GUILD_ID=your_discord_server_id
@@ -314,13 +318,35 @@ LOG_LEVEL=INFO
 
 ## Step 8: Deploy and Initialize
 
-### 8.1 Build and Start Container
+### 8.1 Authenticate with OCIR
+
+Before pulling the Docker image, authenticate with Oracle Container Registry:
+
+```bash
+# Log in to OCIR (replace with your values)
+docker login <region>.ocir.io -u '<tenancy-namespace>/<username>' -p '<auth-token>'
+```
+
+**Example:**
+```bash
+docker login iad.ocir.io -u 'mytenancy/myuser' -p 'your-auth-token-here'
+```
+
+**For federated (SSO) users:**
+```bash
+docker login iad.ocir.io -u 'mytenancy/oracleidentitycloudservice/user@example.com' -p '<auth-token>'
+```
+
+**Note:** You can also configure Docker to use credentials from `/etc/docker/config.json` or use OCI Instance Principals (recommended for production).
+
+### 8.2 Pull and Start Container
 
 From your deployment directory:
 
 ```bash
 cd deployments/newclan
-docker compose up -d --build
+docker compose pull  # Pull latest image from OCIR
+docker compose up -d  # Start container (no --build needed, using pre-built image)
 ```
 
 ### 8.2 Check Logs
@@ -363,14 +389,15 @@ docker compose restart bot
 ### Update Bot
 
 ```bash
-# Pull latest changes
-cd ../..
-git pull
-
-# Rebuild and restart
+# Pull latest image from OCIR (built by GitHub Actions)
 cd deployments/newclan
-docker compose up -d --build
+docker compose pull
+
+# Restart with new image
+docker compose up -d
 ```
+
+**Note:** Images are automatically built and pushed to OCIR by GitHub Actions on every push to `main` branch. You only need to pull and restart on your compute instance.
 
 ### Stop Bot
 
