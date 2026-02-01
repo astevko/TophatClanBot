@@ -1,0 +1,10 @@
+oracle stacks
+
+region 1
+ocid1.ormstack.oc1.us-chicago-1.amaaaaaawgku4xaahyb4ps5hgctrwiy6meix6vdy2gcf5xpavzc3c5thkz4a
+
+AD-2
+ocid1.ormstack.oc1.us-chicago-1.amaaaaaawgku4xaahvlwqc5zb6ne2kqkzl365jzeiof2lkrcl45w2pynrw4q	
+
+AD-3
+ocid1.ormstack.oc1.us-chicago-1.amaaaaaawgku4xaaeaelytawv46dn5i477lq3kx3irxjhmmevlcvxjprrc6q
